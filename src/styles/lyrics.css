@@ -13,12 +13,30 @@ body.no-scroll {
   background: #080d0b;
   transform: translateY(100%);
   visibility: hidden;
+  /* 裁掉 .lyrics-bg 负 inset 溢出的模糊亮斑，否则抽屉滑动时上边缘会突然出现一圈白色渐变 */
+  overflow: hidden;
   transition: transform 0.42s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0.42s;
 }
 
 .lyrics-view.is-open {
   transform: none;
   visibility: visible;
+}
+
+/* ---------- 展开/收回时的主页面模糊过渡（类 iOS 通知中心） ---------- */
+/* 顶栏 + 内容区整体随抽屉同步模糊/还原，缓动与抽屉一致，视觉上严格同步 */
+.app-shell {
+  transition: filter 0.42s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+body.lyrics-open .app-shell {
+  filter: blur(16px) brightness(0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
 }
 
 .lyrics-bg {

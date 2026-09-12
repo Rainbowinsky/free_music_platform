@@ -56,24 +56,27 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar />
-      <div className="app-body">
-        <Sidebar />
-        <main className="app-main">
-          <SyncBanner />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/playlist/:id" element={<PlaylistDetail />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/likes" element={<Likes />} />
-            <Route path="/collection" element={<Collection />} />
-            <Route path="/recent" element={<Recent />} />
-            <Route path="/ranking" element={<Ranking />} />
-            <Route path="/artists" element={<Artists />} />
-            <Route path="/artist/:name" element={<ArtistDetail />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </main>
+      {/* 歌词抽屉展开时这一整块会同步模糊（body.lyrics-open），播放条与抽屉本身不模糊 */}
+      <div className="app-shell">
+        <TopBar />
+        <div className="app-body">
+          <Sidebar />
+          <main className="app-main">
+            <SyncBanner />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/playlist/:id" element={<PlaylistDetail />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/likes" element={<Likes />} />
+              <Route path="/collection" element={<Collection />} />
+              <Route path="/recent" element={<Recent />} />
+              <Route path="/ranking" element={<Ranking />} />
+              <Route path="/artists" element={<Artists />} />
+              <Route path="/artist/:name" element={<ArtistDetail />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+        </div>
       </div>
       <PlayerBar />
       <QueueDrawer />

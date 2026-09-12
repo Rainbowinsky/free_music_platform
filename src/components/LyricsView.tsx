@@ -49,10 +49,14 @@ export default function LyricsView() {
     return () => window.removeEventListener('popstate', handlePop);
   }, [open, setLyricsOpen]);
 
-  // 打开时锁定背景滚动
+  // 打开时锁定背景滚动；同时给 body 挂 lyrics-open，驱动主页面同步模糊过渡
   useEffect(() => {
     document.body.classList.toggle('no-scroll', open);
-    return () => document.body.classList.remove('no-scroll');
+    document.body.classList.toggle('lyrics-open', open);
+    return () => {
+      document.body.classList.remove('no-scroll');
+      document.body.classList.remove('lyrics-open');
+    };
   }, [open]);
 
   useEffect(() => {
