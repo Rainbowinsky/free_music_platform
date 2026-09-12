@@ -254,3 +254,47 @@ export const StopIcon = (p: IconProps) => (
     <rect x="6.5" y="6.5" width="11" height="11" rx="2" />
   </Svg>
 );
+
+export const LockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4.5" y="10" width="15" height="10" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M8 10V7.2a4 4 0 0 1 8 0V10" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="12" cy="14.6" r="1.4" />
+  </Svg>
+);
+
+export const EyeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path
+      d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.7" />
+  </Svg>
+);
+
+export const EyeOffIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path
+      d="M4 4.8l16 14.4M9.9 6.2A9.6 9.6 0 0 1 12 5.8c5.8 0 9.2 6.2 9.2 6.2a17 17 0 0 1-2.7 3.5M6.3 8.3A16.4 16.4 0 0 0 2.8 12S6.2 18.2 12 18.2c1.4 0 2.7-.4 3.8-1"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path d="M10 10.2a2.8 2.8 0 0 0 3.9 3.9" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </Svg>
+);
+
+export const SmileIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M8.6 14.2a4.4 4.4 0 0 0 6.8 0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="9.2" cy="10" r="0.9" />
+    <circle cx="14.8" cy="10" r="0.9" />
+  </Svg>
+);

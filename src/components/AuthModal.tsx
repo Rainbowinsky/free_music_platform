@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../store/auth';
 import { store } from '../lib/db';
-import { CloseIcon, MusicNoteIcon } from './Icons';
+import { CloseIcon, EyeIcon, EyeOffIcon, LockIcon, MusicNoteIcon, SmileIcon, UserIcon } from './Icons';
+import ParticleBackground from './ParticleBackground';
 
 type Tab = 'login' | 'register';
 
@@ -18,6 +19,7 @@ export default function AuthModal() {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   /** 旧版本地账号库是否还有数据（存在则提示用户用原账号名重新注册/登录） */
   const [legacyUser, setLegacyUser] = useState('');
 
@@ -33,6 +35,7 @@ export default function AuthModal() {
       setError('');
       setPassword('');
       setLoading(false);
+      setShowPassword(false);
     }
   }, [modalOpen, tab]);
 
@@ -68,23 +71,27 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="modal-mask" onMouseDown={closeModal} role="presentation">
+    <div className="modal-mask auth-mask" onMouseDown={closeModal} role="presentation">
+      <ParticleBackground />
       <div className="auth-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
         <button type="button" className="auth-close" aria-label="关闭" onClick={closeModal}>
           <CloseIcon size={16} />
         </button>
 
         <div className="auth-head">
-          <span className="logo-mark logo-mark-lg">
+          <span className="logo-mark logo-mark-lg auth-logo">
             <MusicNoteIcon size={22} />
           </span>
           <h3>欢迎来到 QQ音乐</h3>
           <p className="auth-sub">登录后即可收藏喜欢的歌曲与歌单</p>
         </div>
 
-        <div className="auth-tabs">
+        <div className="auth-tabs" role="tablist">
+          <span className={`auth-tab-slider ${tab === 'register' ? 'is-right' : ''}`} aria-hidden="true" />
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'login'}
             className={`auth-tab ${tab === 'login' ? 'is-active' : ''}`}
             onClick={() => setTab('login')}
           >
@@ -92,6 +99,8 @@ export default function AuthModal() {
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === 'register'}
             className={`auth-tab ${tab === 'register' ? 'is-active' : ''}`}
             onClick={() => setTab('register')}
           >
@@ -104,42 +113,59 @@ export default function AuthModal() {
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-field">
             <span>账号</span>
-            <input
-              value={username}
-              autoFocus
-              autoComplete="username"
-              placeholder="2-16 位中文、字母、数字或下划线"
-              onChange={(event) => setUsername(event.target.value)}
-            />
+            <span className="auth-input-wrap">
+              <UserIcon size={17} className="auth-input-icon" />
+              <input
+                value={username}
+                autoFocus
+                autoComplete="username"
+                placeholder="2-16 位中文、字母、数字或下划线"
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </span>
           </label>
 
           {tab === 'register' ? (
-            <label className="auth-field">
+            <label className="auth-field auth-field-enter">
               <span>昵称</span>
-              <input
-                value={nickname}
-                autoComplete="nickname"
-                placeholder="选填，默认与账号相同"
-                onChange={(event) => setNickname(event.target.value)}
-              />
+              <span className="auth-input-wrap">
+                <SmileIcon size={17} className="auth-input-icon" />
+                <input
+                  value={nickname}
+                  autoComplete="nickname"
+                  placeholder="选填，默认与账号相同"
+                  onChange={(event) => setNickname(event.target.value)}
+                />
+              </span>
             </label>
           ) : null}
 
           <label className="auth-field">
             <span>密码</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-              placeholder="至少 6 位"
-              onChange={(event) => setPassword(event.target.value)}
-            />
+            <span className="auth-input-wrap">
+              <LockIcon size={17} className="auth-input-icon" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+                placeholder="至少 6 位"
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                className="auth-eye"
+                aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                onClick={() => setShowPassword((v) => !v)}
+              >
+                {showPassword ? <EyeOffIcon size={17} /> : <EyeIcon size={17} />}
+              </button>
+            </span>
           </label>
 
           {error ? <p className="auth-error">{error}</p> : null}
 
-          <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? '处理中…' : tab === 'login' ? '登录' : '注册并登录'}
+          <button type="submit" className="btn auth-submit btn-block" disabled={loading}>
+            <span className="auth-submit-label">{loading ? '处理中…' : tab === 'login' ? '登录' : '注册并登录'}</span>
           </button>
         </form>
 
