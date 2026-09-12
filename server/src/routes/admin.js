@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 
 import { config } from '../config.js';
 import { query, queryOne } from '../db.js';
-import { adminRequired } from '../auth.js';
+import { adminRequired, ROLE, roleRank, normalizeRole } from '../auth.js';
 import { agentStatus } from '../music/agent.js';
 import { archiveUploadedFile, collectCandidates, importCandidate, judgeCandidates } from '../music/importer.js';
 
@@ -106,13 +106,67 @@ const mapUser = (row) => ({
   lastLoginAt: row.last_login_at ?? null,
 });
 
-/** 账号列表 */
+const USER_COLS = 'id, username, nickname, role, created_at, last_login_at';
+
+const countByRole = async (role) => {
+  const [row] = await query('SELECT COUNT(*) AS total FROM users WHERE role = ?', [role]);
+  return Number(row.total);
+};
+
+/**
+ * 角色变更的统一护栏。返回错误文案，通过则返回 null。
+ *
+ * 规则（对应「超管可给任何人管理员权限，但自身不可被降级」）：
+ *  1. 只有 superadmin 能授予 / 撤销 admin 权限（admin 之间不能互相提降）
+ *  2. superadmin 不能被任何人降级（包括其他 superadmin），保证超管身份稳定
+ *  3. 不能修改自己的角色（避免误操作把自己锁死）
+ *  4. 其它角色变更仍需保留角色基数
+ */
+async function checkRoleChange({ actorId, actorRole, target, nextRole }) {
+  const targetRole = target.role;
+  if (nextRole === targetRole) return null;
+
+  const touchesAdminLevel = roleRank(targetRole) >= 1 || roleRank(nextRole) >= 1;
+
+  // 规则 1：涉及 admin/superadmin 层级的变更，只有超管能操作
+  if (touchesAdminLevel && actorRole !== ROLE.SUPERADMIN) {
+    return '只有超级管理员可以授予或撤销管理员权限';
+  }
+
+  // 规则 2：superadmin 不可被降级
+  if (targetRole === ROLE.SUPERADMIN && nextRole !== ROLE.SUPERADMIN) {
+    return '超级管理员不能被降级';
+  }
+
+  // 规则 3：不能改自己的角色
+  if (Number(target.id) === Number(actorId)) {
+    return '不能修改自己的角色，请让其他超级管理员操作';
+  }
+
+  // 规则 4：仍要保留至少一个 superadmin
+  if (targetRole === ROLE.SUPERADMIN) {
+    const total = await countByRole(ROLE.SUPERADMIN);
+    if (total <= 1) return '系统至少要保留一个超级管理员';
+  }
+
+  return null;
+}
+
+/** 账号列表（全部账号，含主站注册的普通用户） */
 router.get('/users', adminRequired, async (req, res) => {
-  const rows = await query('SELECT id, username, nickname, role, created_at, last_login_at FROM users ORDER BY id');
-  res.json({ items: rows.map(mapUser), currentId: Number(req.auth.sub) });
+  const rows = await query(
+    `SELECT ${USER_COLS} FROM users
+      ORDER BY FIELD(role, 'superadmin', 'admin', 'user'), id`,
+  );
+  res.json({
+    items: rows.map(mapUser),
+    currentId: Number(req.auth.sub),
+    currentRole: req.auth.role,
+    canGrantAdmin: req.auth.role === ROLE.SUPERADMIN,
+  });
 });
 
-/** 新建账号（管理员可直接指定角色） */
+/** 新建账号（超级管理员可直接指定任意角色） */
 router.post('/users', adminRequired, async (req, res) => {
   const { username, password, nickname, role } = req.body || {};
   const name = String(username || '').trim();
@@ -121,16 +175,20 @@ router.post('/users', adminRequired, async (req, res) => {
   const exists = await queryOne('SELECT id FROM users WHERE username = ?', [name]);
   if (exists) return res.status(409).json({ error: '该账号已存在' });
 
+  const nextRole = normalizeRole(role);
+  // 只有超管能创建 admin / superadmin，普通管理员只能建普通用户
+  if (nextRole !== ROLE.USER && req.auth.role !== ROLE.SUPERADMIN) {
+    return res.status(403).json({ error: '只有超级管理员可以创建管理员账号' });
+  }
+
   const hash = await bcrypt.hash(String(password), 10);
   const insert = await query('INSERT INTO users (username, password_hash, nickname, role) VALUES (?, ?, ?, ?)', [
     name,
     hash,
     String(nickname || '').trim() || name,
-    role === 'admin' ? 'admin' : 'user',
+    nextRole,
   ]);
-  const row = await queryOne('SELECT id, username, nickname, role, created_at, last_login_at FROM users WHERE id = ?', [
-    insert.insertId,
-  ]);
+  const row = await queryOne(`SELECT ${USER_COLS} FROM users WHERE id = ?`, [insert.insertId]);
   return res.json({ user: mapUser(row) });
 });
 
@@ -152,14 +210,14 @@ router.patch('/users/:id', adminRequired, async (req, res) => {
   }
 
   if (role !== undefined && role !== target.role) {
-    const nextRole = role === 'admin' ? 'admin' : 'user';
-    if (id === Number(req.auth.sub) && nextRole !== 'admin') {
-      return res.status(400).json({ error: '不能取消自己的管理员权限，请让其他管理员操作' });
-    }
-    if (target.role === 'admin' && nextRole !== 'admin') {
-      const [{ total }] = await query("SELECT COUNT(*) AS total FROM users WHERE role = 'admin'");
-      if (Number(total) <= 1) return res.status(400).json({ error: '至少要保留一个管理员' });
-    }
+    const nextRole = normalizeRole(role);
+    const denied = await checkRoleChange({
+      actorId: req.auth.sub,
+      actorRole: req.auth.role,
+      target,
+      nextRole,
+    });
+    if (denied) return res.status(403).json({ error: denied });
     sets.push('role = ?');
     params.push(nextRole);
   }
@@ -167,17 +225,23 @@ router.patch('/users/:id', adminRequired, async (req, res) => {
   if (!sets.length) return res.status(400).json({ error: '没有需要更新的字段' });
   params.push(id);
   await query(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`, params);
-  const row = await queryOne('SELECT id, username, nickname, role, created_at, last_login_at FROM users WHERE id = ?', [id]);
+  const row = await queryOne(`SELECT ${USER_COLS} FROM users WHERE id = ?`, [id]);
   return res.json({ user: mapUser(row) });
 });
 
-/** 重置密码（管理员可重置任意账号，包括自己） */
+/** 重置密码（管理员可重置普通用户；管理员及以上仅超管可重置） */
 router.post('/users/:id/password', adminRequired, async (req, res) => {
   const id = Number(req.params.id);
   const { password } = req.body || {};
   if (String(password || '').length < 6) return res.status(400).json({ error: '密码长度不能少于 6 位' });
-  const target = await queryOne('SELECT id FROM users WHERE id = ?', [id]);
+  const target = await queryOne('SELECT id, username, role FROM users WHERE id = ?', [id]);
   if (!target) return res.status(404).json({ error: '账号不存在' });
+
+  // 避免普通管理员通过改密码的方式接管管理员/超管账号
+  if (target.role !== ROLE.USER && req.auth.role !== ROLE.SUPERADMIN) {
+    return res.status(403).json({ error: '只有超级管理员可以重置管理员账号的密码' });
+  }
+
   const hash = await bcrypt.hash(String(password), 10);
   await query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, id]);
   return res.json({ ok: true });
@@ -186,13 +250,21 @@ router.post('/users/:id/password', adminRequired, async (req, res) => {
 /** 删除账号 */
 router.delete('/users/:id', adminRequired, async (req, res) => {
   const id = Number(req.params.id);
-  if (id === Number(req.auth.sub)) return res.status(400).json({ error: '不能删除当前登录的账号' });
   const target = await queryOne('SELECT * FROM users WHERE id = ?', [id]);
   if (!target) return res.status(404).json({ error: '账号不存在' });
-  if (target.role === 'admin') {
-    const [{ total }] = await query("SELECT COUNT(*) AS total FROM users WHERE role = 'admin'");
-    if (Number(total) <= 1) return res.status(400).json({ error: '至少要保留一个管理员' });
+
+  if (Number(req.auth.sub) === id) return res.status(400).json({ error: '不能删除当前登录的账号' });
+
+  if (target.role === ROLE.SUPERADMIN) {
+    return res.status(403).json({ error: '超级管理员不能被删除' });
   }
+  if (target.role === ROLE.ADMIN && req.auth.role !== ROLE.SUPERADMIN) {
+    return res.status(403).json({ error: '只有超级管理员可以删除管理员账号' });
+  }
+  if (target.role === ROLE.ADMIN && (await countByRole(ROLE.ADMIN)) <= 1) {
+    return res.status(400).json({ error: '至少要保留一个管理员' });
+  }
+
   await query('DELETE FROM users WHERE id = ?', [id]);
   return res.json({ ok: true });
 });

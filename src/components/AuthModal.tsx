@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../store/auth';
+import { store } from '../lib/db';
 import { CloseIcon, MusicNoteIcon } from './Icons';
 
 type Tab = 'login' | 'register';
@@ -17,6 +18,15 @@ export default function AuthModal() {
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  /** 旧版本地账号库是否还有数据（存在则提示用户用原账号名重新注册/登录） */
+  const [legacyUser, setLegacyUser] = useState('');
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    // 用户名一填就检查旧库，命中说明这是从本地账号时代迁移过来的用户
+    const name = username.trim();
+    setLegacyUser(name && store.hasLegacyUser(name) ? name : '');
+  }, [modalOpen, username]);
 
   useEffect(() => {
     if (modalOpen) {
@@ -46,7 +56,12 @@ export default function AuthModal() {
       if (tab === 'login') await login(username, password);
       else await register(username, password, nickname);
     } catch (err) {
+      // 后端返回的中文提示（账号不存在 / 密码错误 / 无法连接服务器…）直接展示
       setError(err instanceof Error ? err.message : '操作失败，请稍后再试');
+      // 登录时提示「账号不存在」但旧库里其实有这个账号 → 说明需要先注册迁移
+      if (tab === 'login' && store.hasLegacyUser(username)) {
+        setLegacyUser(username.trim());
+      }
     } finally {
       setLoading(false);
     }
@@ -134,7 +149,11 @@ export default function AuthModal() {
             {tab === 'login' ? '立即注册' : '去登录'}
           </button>
         </p>
-        <p className="auth-tip">账号数据保存在浏览器本地，仅用于演示</p>
+        <p className="auth-tip">
+          {legacyUser
+            ? `检测到旧版本地账号「${legacyUser}」，请用该账号名注册或登录；收藏与歌单会保留`
+            : '账号与管理台共用，登录后收藏、歌单在任意浏览器都可用'}
+        </p>
       </div>
     </div>
   );

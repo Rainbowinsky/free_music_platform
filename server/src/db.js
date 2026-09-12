@@ -19,7 +19,7 @@ const TABLES = [
     username VARCHAR(32) NOT NULL,
     password_hash VARCHAR(100) NOT NULL,
     nickname VARCHAR(32) NOT NULL,
-    role ENUM('admin','user') NOT NULL DEFAULT 'user',
+    role ENUM('superadmin','admin','user') NOT NULL DEFAULT 'user',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uk_username (username)
@@ -94,12 +94,68 @@ const TABLES = [
     PRIMARY KEY (id),
     KEY idx_created (created_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='入库任务'`,
+
+  /* ── 「我的音乐」：登录用户的私有数据 ──
+   * 注意 song_id 用的是**前端 Song.id**（网易云的 sourceId 字符串，如 "1357375695"），
+   * 不是 songs 表的自增主键。原因是前端历史「喜欢」记录就是按这个 id 存的，
+   * 而且静态兜底曲库里的歌可能还没入库（没有 songs.id）。
+   * 因此这里刻意**不加** songs 外键，避免歌曲被管理台删除时连带清掉用户数据。
+   */
+  `CREATE TABLE IF NOT EXISTS user_songs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    song_id VARCHAR(64) NOT NULL COMMENT '前端 Song.id（来源侧 ID）',
+    kind ENUM('like','recent') NOT NULL DEFAULT 'like',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_song_kind (user_id, song_id, kind),
+    KEY idx_user_kind_created (user_id, kind, created_at),
+    CONSTRAINT fk_usersong_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户喜欢/最近播放'`,
+
+  `CREATE TABLE IF NOT EXISTS user_playlists (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(60) NOT NULL,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    cover VARCHAR(255) NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_user (user_id),
+    CONSTRAINT fk_upl_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户自建歌单'`,
+
+  `CREATE TABLE IF NOT EXISTS user_playlist_songs (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    playlist_id BIGINT UNSIGNED NOT NULL,
+    song_id VARCHAR(64) NOT NULL COMMENT '前端 Song.id',
+    added_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_playlist_song (playlist_id, song_id),
+    KEY idx_playlist_added (playlist_id, added_at),
+    CONSTRAINT fk_ups_playlist FOREIGN KEY (playlist_id) REFERENCES user_playlists (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='歌单内的歌曲'`,
+
+  `CREATE TABLE IF NOT EXISTS user_collected_playlists (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    playlist_id VARCHAR(64) NOT NULL COMMENT '官方歌单 id（前端静态数据里的字符串）',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_playlist (user_id, playlist_id),
+    KEY idx_user_created (user_id, created_at),
+    CONSTRAINT fk_ucp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏的官方歌单'`,
 ];
 
 /** 建库 + 建表（幂等，可重复执行） */
 /** 增量迁移：老库补字段用，重复执行不会报错 */
 const COLUMN_MIGRATIONS = [
   `ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL COMMENT '最后登录时间'`,
+  // 三级角色：超级管理员 > 管理员 > 普通用户
+  // 老库的 role 是 ENUM('admin','user')，扩枚举不能靠 CREATE TABLE IF NOT EXISTS
+  `ALTER TABLE users MODIFY COLUMN role ENUM('superadmin','admin','user') NOT NULL DEFAULT 'user'`,
 ];
 
 export async function initSchema() {
@@ -120,7 +176,8 @@ export async function initSchema() {
     try {
       await pool.query(sql);
     } catch (error) {
-      if (error.code !== 'ER_DUP_FIELDNAME') throw error; // 字段已存在则忽略
+      // 字段已存在 / 枚举值已是最新时忽略
+      if (error.code !== 'ER_DUP_FIELDNAME' && error.code !== 'ER_INVALID_USE_OF_NULL') throw error;
     }
   }
   return TABLES.length;

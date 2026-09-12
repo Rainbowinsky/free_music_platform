@@ -17,8 +17,8 @@ interface SongListProps {
   context?: Song[];
   compact?: boolean;
   emptyText?: string;
-  /** 传入后在每行显示“从歌单移除”按钮（我创建的歌单） */
-  onRemoveSong?: (song: Song) => void;
+  /** 传入后在每行显示“从歌单移除”按钮（我创建的歌单）；异步写入由调用方处理 */
+  onRemoveSong?: (song: Song) => void | Promise<void>;
 }
 
 export default function SongList({
@@ -149,7 +149,7 @@ export default function SongList({
                   className="song-remove"
                   title="从歌单中移除"
                   aria-label="从歌单中移除"
-                  onClick={() => onRemoveSong(song)}
+                  onClick={() => void onRemoveSong(song)}
                 >
                   <CloseIcon size={14} />
                 </button>

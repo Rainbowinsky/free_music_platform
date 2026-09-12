@@ -133,9 +133,10 @@ export default function PlaylistDetail() {
             context={songs}
             onRemoveSong={
               isOwn
-                ? (song) => {
-                    removeSong(id, song.id);
-                    toast(`已从「${title}」移除《${song.name}》`);
+                ? async (song) => {
+                    await removeSong(id, song.id);
+                    const failure = useLibrary.getState().error;
+                    toast(failure || `已从「${title}」移除《${song.name}》`);
                   }
                 : undefined
             }

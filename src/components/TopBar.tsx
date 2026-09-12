@@ -43,8 +43,10 @@ export default function TopBar() {
   const [themeOpen, setThemeOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
-  // 浏览器里已经登录过管理台的话（localStorage 有 JWT），顶栏给一个直达入口
+  // 已经在浏览器里登录过管理台（localStorage 有 JWT）时可以直达；
+  // 主站账号如果是 admin 角色（与管理台共用 users 表）也一并算作「可进管理台」
   const [adminUser] = useState(() => adminAuth.getUser());
+  const canAdmin = Boolean(adminUser) || user?.role === 'admin';
 
   useEffect(() => {
     if (location.pathname === '/search') {
@@ -156,8 +158,8 @@ export default function TopBar() {
             开通VIP
           </button>
 
-          {/* 已经登录过管理台的话，这里给一个直达入口 */}
-          {adminUser ? (
+          {/* 已登录管理台，或主站账号是管理员时，给一个直达入口 */}
+          {canAdmin ? (
             <Link to="/admin" className="admin-entry" title="进入曲库管理台">
               <SettingsIcon size={16} />
               管理台
@@ -191,7 +193,7 @@ export default function TopBar() {
                   <Link className="user-menu-item is-admin" to="/admin" onClick={() => setMenuOpen(false)}>
                     <SettingsIcon size={15} />
                     曲库管理台
-                    {adminUser ? <em className="user-menu-role">已登录</em> : null}
+                    {canAdmin ? <em className="user-menu-role">{adminUser ? '已登录' : '可进入'}</em> : null}
                   </Link>
                   <button
                     type="button"

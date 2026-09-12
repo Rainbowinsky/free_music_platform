@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Cover from './Cover';
 import { CloseIcon, PlusIcon } from './Icons';
 import { SONG_MAP as STATIC_MAP } from '../data/songs';
@@ -16,6 +16,7 @@ export default function AddToPlaylistModal() {
   const addSong = useLibrary((s) => s.addSongToPlaylist);
   const catalogMap = useSongMap();
   const songMap = Object.keys(catalogMap).length ? catalogMap : STATIC_MAP;
+  const [busyId, setBusyId] = useState('');
 
   useEffect(() => {
     if (!songId) return undefined;
@@ -54,11 +55,18 @@ export default function AddToPlaylistModal() {
                   key={playlist.id}
                   type="button"
                   className="add-row"
-                  disabled={exists}
-                  onClick={() => {
-                    addSong(playlist.id, songId);
-                    toast(exists ? '这首歌已经在歌单里了' : `已添加到「${playlist.title}」`);
-                    close();
+                  disabled={exists || Boolean(busyId)}
+                  onClick={async () => {
+                    if (busyId) return;
+                    setBusyId(playlist.id);
+                    const ok = await addSong(playlist.id, songId);
+                    setBusyId('');
+                    if (ok) {
+                      toast(`已添加到「${playlist.title}」`);
+                      close();
+                    } else {
+                      toast(useLibrary.getState().error || '添加失败，请稍后重试');
+                    }
                   }}
                 >
                   <Cover
@@ -71,7 +79,9 @@ export default function AddToPlaylistModal() {
                     <span className="add-title">{playlist.title}</span>
                     <span className="add-count">{playlist.songIds.length} 首</span>
                   </span>
-                  <span className={`add-state ${exists ? 'is-exists' : ''}`}>{exists ? '已添加' : '添加'}</span>
+                  <span className={`add-state ${exists ? 'is-exists' : ''}`}>
+                    {exists ? '已添加' : busyId === playlist.id ? '添加中…' : '添加'}
+                  </span>
                 </button>
               );
             })

@@ -19,6 +19,49 @@
   padding: 24px 0 40px;
 }
 
+/* 「我的音乐」同步失败提示：后端没起 / token 过期时不该静默失败 */
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--red);
+  border-radius: 10px;
+  background: var(--danger-50);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.sync-banner-text {
+  min-width: 0;
+}
+
+.sync-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.sync-banner-close {
+  border: none;
+  background: transparent;
+  color: var(--text-4);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.sync-banner-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-2);
+}
+
 .page {
   animation: fade-up 0.28s ease;
 }

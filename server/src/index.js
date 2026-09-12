@@ -16,10 +16,12 @@ import {
   ensureSeedAdmin,
   findUserById,
   loginUser,
+  registerEndUser,
   registerUser,
 } from './auth.js';
 import libraryRoutes from './routes/library.js';
 import adminRoutes from './routes/admin.js';
+import meRoutes from './routes/me.js';
 
 const app = express();
 app.use(cors());
@@ -41,9 +43,19 @@ app.get('/api/health', async (_req, res) => {
 });
 
 // ── 鉴权
+// 管理台注册：第一个注册的账号自动成为管理员（仅用于首次部署）
 app.post('/api/auth/register', async (req, res, next) => {
   try {
     res.json(await registerUser(req.body || {}));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 主站（音乐站）注册：与上面共用 users 表，但一律 user 角色，不能借此拿到管理员权限
+app.post('/api/auth/register-user', async (req, res, next) => {
+  try {
+    res.json(await registerEndUser(req.body || {}));
   } catch (error) {
     next(error);
   }
@@ -66,6 +78,8 @@ app.get('/api/auth/me', authRequired, async (req, res) => {
 // ── 业务路由
 app.use('/api/library', libraryRoutes);
 app.use('/api/admin', adminRoutes);
+// 「我的音乐」私有数据（喜欢/收藏/歌单/最近播放），全部需要登录
+app.use('/api/me', meRoutes);
 
 app.use((req, res) => res.status(404).json({ error: `接口不存在: ${req.method} ${req.path}` }));
 

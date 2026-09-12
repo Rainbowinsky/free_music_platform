@@ -5,14 +5,23 @@
 const TOKEN_KEY = 'qqmusic.admin.token';
 const USER_KEY = 'qqmusic.admin.user';
 
+export type Role = 'superadmin' | 'admin' | 'user';
+
 export interface AdminUser {
   id: number;
   username: string;
   nickname: string;
-  role: 'admin' | 'user';
+  role: Role;
   createdAt?: string;
   lastLoginAt?: string | null;
 }
+
+/** 角色展示标签与语气 */
+export const ROLE_META: Record<Role, { text: string; tone: string }> = {
+  superadmin: { text: '超级管理员', tone: 'is-danger' },
+  admin: { text: '管理员', tone: 'is-ok' },
+  user: { text: '普通用户', tone: 'is-muted' },
+};
 
 export interface Candidate {
   server: string;
@@ -238,12 +247,13 @@ export const adminApi = {
   stats: () => request<LibraryStats>('/api/library/stats'),
 
   /* 账号管理 */
-  users: () => request<{ items: AdminUser[]; currentId: number }>('/api/admin/users'),
+  users: () =>
+    request<{ items: AdminUser[]; currentId: number; currentRole: Role; canGrantAdmin: boolean }>('/api/admin/users'),
 
-  createUser: (payload: { username: string; password: string; nickname?: string; role?: 'admin' | 'user' }) =>
+  createUser: (payload: { username: string; password: string; nickname?: string; role?: Role }) =>
     request<{ user: AdminUser }>('/api/admin/users', { body: payload }),
 
-  updateUser: (id: number, patch: { nickname?: string; role?: 'admin' | 'user' }) =>
+  updateUser: (id: number, patch: { nickname?: string; role?: Role }) =>
     request<{ user: AdminUser }>(`/api/admin/users/${id}`, { method: 'PATCH', body: patch }),
 
   resetPassword: (id: number, password: string) =>

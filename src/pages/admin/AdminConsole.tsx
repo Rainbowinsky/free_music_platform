@@ -8,6 +8,7 @@ import {
   formatDateTime,
   formatDuration,
   formatSize,
+  ROLE_META,
   SOURCE_LABEL,
   VERDICT_LABEL,
   type AdminSong,
@@ -16,6 +17,7 @@ import {
   type Candidate,
   type ImportTask,
   type LibraryStats,
+  type Role,
   type SearchResult,
 } from '../../lib/adminApi';
 import Cover from '../../components/Cover';
@@ -80,7 +82,8 @@ export default function AdminConsole() {
 
   if (checking) return <div className="adm-boot">正在检查登录状态…</div>;
   if (!user) return <AdminLogin onSuccess={(u) => { setUser(u); refreshStats(); }} />;
-  if (user.role !== 'admin') {
+  // admin 与 superadmin 都能进管理台
+  if (user.role !== 'admin' && user.role !== 'superadmin') {
     return (
       <div className="adm-boot">
         <p>当前账号「{user.nickname}」不是管理员，无法进入曲库管理台。</p>
@@ -938,7 +941,7 @@ interface UserFormState {
   id?: number;
   username: string;
   nickname: string;
-  role: 'admin' | 'user';
+  role: Role;
   password: string;
 }
 
@@ -947,6 +950,8 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const [form, setForm] = useState<UserFormState | null>(null);
   const [pwdTarget, setPwdTarget] = useState<AdminUser | null>(null);
   const [newPassword, setNewPassword] = useState('');
@@ -968,11 +973,49 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
     void load();
   }, [load]);
 
+  // 当前登录者的角色以服务端返回为准（JWT 里的 role 可能与库中不一致）
+  const selfRole = items.find((u) => u.id === current.id)?.role ?? current.role;
+  const isSuper = selfRole === 'superadmin';
+  const superCount = items.filter((u) => u.role === 'superadmin').length;
   const adminCount = items.filter((u) => u.role === 'admin').length;
+
+  const filtered = items.filter((u) => {
+    if (roleFilter && u.role !== roleFilter) return false;
+    const q = keyword.trim().toLowerCase();
+    if (!q) return true;
+    return u.username.toLowerCase().includes(q) || u.nickname.toLowerCase().includes(q);
+  });
+
+  /**
+   * 前端预判某个操作是否被允许，用于禁用按钮并给出原因。
+   * 真正的裁决仍在后端（checkRoleChange），这里只是避免用户点了才报错。
+   */
+  const reasonFor = (user: AdminUser, action: 'role' | 'password' | 'delete'): string => {
+    const isSelf = user.id === current.id;
+    if (action === 'role') {
+      if (isSelf) return '不能修改自己的角色';
+      if (user.role === 'superadmin') return '超级管理员不能被降级';
+      if (!isSuper) return '只有超级管理员可以授予或撤销管理员权限';
+      return '';
+    }
+    if (action === 'password') {
+      if (user.role !== 'user' && !isSuper) return '只有超级管理员可以重置管理员账号的密码';
+      return '';
+    }
+    if (action === 'delete') {
+      if (isSelf) return '不能删除当前登录账号';
+      if (user.role === 'superadmin') return '超级管理员不能被删除';
+      if (user.role === 'admin' && !isSuper) return '只有超级管理员可以删除管理员账号';
+      if (user.role === 'admin' && adminCount <= 1) return '至少要保留一个管理员';
+      return '';
+    }
+    return '';
+  };
 
   const submitForm = async () => {
     if (!form) return;
     setError('');
+    setNotice('');
     try {
       if (form.mode === 'create') {
         await adminApi.createUser({
@@ -981,7 +1024,7 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
           nickname: form.nickname,
           role: form.role,
         });
-        setNotice(`已创建账号「${form.username}」（${form.role === 'admin' ? '管理员' : '普通用户'}）`);
+        setNotice(`已创建账号「${form.username}」（${ROLE_META[form.role].text}）`);
       } else if (form.id) {
         const { user } = await adminApi.updateUser(form.id, { nickname: form.nickname, role: form.role });
         if (user.id === current.id) onSelfChanged({ ...current, nickname: user.nickname, role: user.role });
@@ -997,6 +1040,7 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
   const submitPassword = async () => {
     if (!pwdTarget) return;
     setError('');
+    setNotice('');
     try {
       await adminApi.resetPassword(pwdTarget.id, newPassword);
       setNotice(`已重置「${pwdTarget.username}」的密码`);
@@ -1007,14 +1051,14 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
     }
   };
 
-  const toggleRole = async (user: AdminUser) => {
+  /** 设置角色：user / admin / superadmin 之间的切换 */
+  const setRole = async (user: AdminUser, nextRole: Role) => {
     setError('');
     setNotice('');
     try {
-      const nextRole = user.role === 'admin' ? 'user' : 'admin';
       const { user: updated } = await adminApi.updateUser(user.id, { role: nextRole });
       if (updated.id === current.id) onSelfChanged({ ...current, role: updated.role });
-      setNotice(`「${user.username}」已${nextRole === 'admin' ? '提升为管理员' : '降级为普通用户'}`);
+      setNotice(`「${user.username}」已设为${ROLE_META[nextRole].text}`);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '操作失败');
@@ -1040,9 +1084,7 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
         <button
           type="button"
           className="adm-btn is-primary"
-          onClick={() =>
-            setForm({ mode: 'create', username: '', nickname: '', role: 'admin', password: '' })
-          }
+          onClick={() => setForm({ mode: 'create', username: '', nickname: '', role: 'user', password: '' })}
         >
           <PlusIcon size={15} />
           新建账号
@@ -1050,8 +1092,21 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
         <button type="button" className="adm-btn" onClick={() => void load()}>
           刷新
         </button>
+        <input
+          className="adm-input adm-search"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          placeholder="搜索账号或昵称"
+        />
+        <select className="adm-input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+          <option value="">全部角色</option>
+          <option value="superadmin">超级管理员</option>
+          <option value="admin">管理员</option>
+          <option value="user">普通用户</option>
+        </select>
         <span className="adm-dim adm-user-summary">
-          共 {items.length} 个账号 · {adminCount} 个管理员 · 当前登录：{current.nickname}（{current.username}）
+          共 {items.length} 个账号 · {superCount} 个超管 · {adminCount} 个管理员 · 当前登录：
+          {current.nickname}（{ROLE_META[selfRole].text}）
         </span>
       </div>
 
@@ -1071,9 +1126,13 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => {
+            {filtered.map((item) => {
               const isSelf = item.id === current.id;
-              const lastAdmin = item.role === 'admin' && adminCount <= 1;
+              const meta = ROLE_META[item.role];
+              const nextRole: Role = item.role === 'user' ? 'admin' : 'user';
+              const roleReason = reasonFor(item, 'role');
+              const pwdReason = reasonFor(item, 'password');
+              const delReason = reasonFor(item, 'delete');
               return (
                 <tr key={item.id}>
                   <td>
@@ -1087,11 +1146,7 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
                   </td>
                   <td>{item.nickname}</td>
                   <td>
-                    {item.role === 'admin' ? (
-                      <span className="adm-tag is-ok">管理员</span>
-                    ) : (
-                      <span className="adm-tag is-muted">普通用户</span>
-                    )}
+                    <span className={`adm-tag ${meta.tone}`}>{meta.text}</span>
                   </td>
                   <td className="adm-dim">{formatDateTime(item.createdAt)}</td>
                   <td className="adm-dim">{formatDateTime(item.lastLoginAt)}</td>
@@ -1116,15 +1171,28 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
                       <button
                         type="button"
                         className="adm-btn is-sm"
-                        disabled={isSelf || lastAdmin}
-                        title={isSelf ? '不能修改自己的角色' : lastAdmin ? '至少要保留一个管理员' : ''}
-                        onClick={() => void toggleRole(item)}
+                        disabled={Boolean(roleReason)}
+                        title={roleReason || (nextRole === 'admin' ? '授予管理员权限' : '降为普通用户')}
+                        onClick={() => void setRole(item, nextRole)}
                       >
-                        {item.role === 'admin' ? '降为普通' : '设为管理员'}
+                        {item.role === 'user' ? '设为管理员' : '降为普通'}
                       </button>
+                      {/* 超管专属：把管理员提升为超级管理员 */}
+                      {isSuper && item.role === 'admin' ? (
+                        <button
+                          type="button"
+                          className="adm-btn is-sm"
+                          title="提升为超级管理员（可授予/撤销管理员权限）"
+                          onClick={() => void setRole(item, 'superadmin')}
+                        >
+                          设为超管
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="adm-btn is-sm"
+                        disabled={Boolean(pwdReason)}
+                        title={pwdReason}
                         onClick={() => {
                           setPwdTarget(item);
                           setNewPassword('');
@@ -1135,8 +1203,8 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
                       <button
                         type="button"
                         className="adm-btn is-sm is-danger"
-                        disabled={isSelf || lastAdmin}
-                        title={isSelf ? '不能删除当前登录账号' : lastAdmin ? '至少要保留一个管理员' : ''}
+                        disabled={Boolean(delReason)}
+                        title={delReason}
                         onClick={() => void remove(item)}
                       >
                         <TrashIcon size={14} />
@@ -1148,12 +1216,15 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
             })}
           </tbody>
         </table>
-        {!items.length && !loading ? <p className="adm-empty-note">还没有账号</p> : null}
+        {!filtered.length && !loading ? (
+          <p className="adm-empty-note">{items.length ? '没有匹配的账号' : '还没有账号'}</p>
+        ) : null}
       </div>
 
       <p className="adm-empty-note adm-note-left">
-        说明：管理台账号存在 MySQL（`users` 表），与音乐站主站的 localStorage 演示账号互不影响。
-        系统始终至少保留一个管理员，因此不能取消自己的管理员权限或删除自己。
+        这里列出**全部账号**，包括音乐站主站注册的普通用户（主站与管理台共用同一张 users 表）。
+        权限规则：只有<strong>超级管理员</strong>能授予或撤销管理员权限；超级管理员自身不可被降级或删除；
+        系统始终保留至少一个超级管理员。
       </p>
 
       {form ? (
@@ -1164,7 +1235,9 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
             </button>
             <h2>{form.mode === 'create' ? '新建账号' : `编辑账号：${form.username}`}</h2>
             <p className="adm-modal-sub">
-              {form.mode === 'create' ? '可直接指定角色，管理员拥有曲库管理台的全部权限' : '账号名不可修改'}
+              {form.mode === 'create'
+                ? '可直接指定角色；只有超级管理员能创建管理员账号'
+                : '账号名不可修改'}
             </p>
 
             {form.mode === 'create' ? (
@@ -1199,9 +1272,12 @@ function UsersTab({ current, onSelfChanged }: { current: AdminUser; onSelfChange
               <select
                 className="adm-input"
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as 'admin' | 'user' })}
+                onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
               >
-                <option value="admin">管理员</option>
+                {isSuper ? <option value="superadmin">超级管理员（可授予/撤销管理员）</option> : null}
+                <option value="admin" disabled={!isSuper}>
+                  管理员{isSuper ? '' : '（需要超级管理员权限）'}
+                </option>
                 <option value="user">普通用户</option>
               </select>
             </label>

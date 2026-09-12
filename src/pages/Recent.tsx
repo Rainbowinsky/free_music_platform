@@ -31,7 +31,12 @@ export default function Recent() {
             <PlayIcon size={14} />
             播放全部
           </button>
-          <button type="button" className="btn btn-outline btn-sm" disabled={!songs.length} onClick={clearRecent}>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            disabled={!songs.length}
+            onClick={() => void clearRecent()}
+          >
             清空记录
           </button>
         </div>

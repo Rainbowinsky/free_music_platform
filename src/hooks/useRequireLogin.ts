@@ -9,12 +9,14 @@ export function useRequireLogin() {
   const openModal = useAuth((s) => s.openModal);
 
   return useCallback(
-    (action?: () => void, hint = '登录后即可使用该功能') => {
+    (action?: () => void | Promise<void>, hint = '登录后即可使用该功能') => {
       if (!user) {
         openModal(hint);
         return false;
       }
-      action?.();
+      // action 现在大多是异步的后端写入，这里统一接住它的 Promise，
+      // 出错由 store 自己的 error 字段呈现，避免出现 unhandled rejection。
+      void Promise.resolve(action?.());
       return true;
     },
     [user, openModal],

@@ -16,7 +16,7 @@ export default function Collection() {
       <Empty
         icon="🔒"
         title="登录后查看我的收藏"
-        desc="收藏的歌单会跟随账号保存在本地"
+        desc="收藏的歌单会跟随账号同步，换设备也在"
         action={
           <button type="button" className="btn btn-primary" onClick={() => openModal('登录后即可收藏歌单')}>
             立即登录

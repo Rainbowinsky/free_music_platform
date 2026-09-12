@@ -9,6 +9,7 @@ import AuthModal from './components/AuthModal';
 import PlaylistModal from './components/PlaylistModal';
 import AddToPlaylistModal from './components/AddToPlaylistModal';
 import Toaster from './components/Toaster';
+import SyncBanner from './components/SyncBanner';
 import Home from './pages/Home';
 import PlaylistDetail from './pages/PlaylistDetail';
 import Search from './pages/Search';
@@ -59,6 +60,7 @@ export default function App() {
       <div className="app-body">
         <Sidebar />
         <main className="app-main">
+          <SyncBanner />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/playlist/:id" element={<PlaylistDetail />} />

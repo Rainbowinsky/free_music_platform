@@ -100,7 +100,8 @@ export const usePlayer = create<PlayerState>((set, get) => {
       progress: 0,
       duration: song.duration || 0,
     });
-    useLibrary.getState().addRecent(song.id);
+    // 最近播放是后台同步，失败不该打断播放
+    void useLibrary.getState().addRecent(song.id);
     if (autoplay) {
       const p = audio.play();
       if (p && typeof p.catch === 'function') p.catch(() => set({ isPlaying: false }));

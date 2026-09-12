@@ -9,7 +9,7 @@ import Cover from './Cover';
 
 interface PlaylistCardProps {
   playlist: Playlist;
-  onRemove?: () => void;
+  onRemove?: () => void | Promise<void>;
 }
 
 export default function PlaylistCard({ playlist, onRemove }: PlaylistCardProps) {
@@ -52,7 +52,7 @@ export default function PlaylistCard({ playlist, onRemove }: PlaylistCardProps) 
           aria-label="取消收藏"
           onClick={(event) => {
             event.preventDefault();
-            onRemove();
+            void onRemove();
           }}
         >
           <TrashIcon size={15} />

@@ -19,7 +19,7 @@ export default function Likes() {
       <Empty
         icon="🔒"
         title="登录后查看我喜欢的音乐"
-        desc="收藏的歌曲会跟随账号保存在本地"
+        desc="收藏的歌曲会跟随账号同步，换设备也在"
         action={
           <button type="button" className="btn btn-primary" onClick={() => openModal('登录后即可收藏喜欢的音乐')}>
             立即登录
@@ -37,7 +37,7 @@ export default function Likes() {
         <div className="likes-info">
           <span className="likes-badge">我喜欢的音乐</span>
           <h2 className="likes-title">{user.nickname}</h2>
-          <p className="likes-desc">共 {songs.length} 首歌曲 · 数据保存在本地浏览器</p>
+          <p className="likes-desc">共 {songs.length} 首歌曲 · 已同步到账号</p>
           <div className="detail-actions">
             <button
               type="button"

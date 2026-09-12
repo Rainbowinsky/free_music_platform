@@ -13,7 +13,9 @@
 | 后端 | Node 22 + Express 5 + mysql2 + JWT + bcryptjs + multer + music-metadata |
 | 数据库 | MySQL 8（库名 `qqmusic`，账号见 `server/.env.local`） |
 | 模型 | DeepSeek（`deepseek-flash`），只用于查询理解 / 实体归一化 / 版本裁决 |
-| 前端账号 | 音乐站主站仍用 localStorage 模拟；管理台走后端真实 JWT + 角色 |
+| 账号 | **主站与管理台共用后端同一张 `users` 表**（MySQL + bcrypt + JWT） |
+
+> 账号体系说明：主站注册走 `/api/auth/register-user`，**一律给 `user` 角色**，不能借此拿到管理员权限；管理台注册走 `/api/auth/register`，仅用于首次部署时种出第一个管理员。两条路径共用同一张表，所以同一个账号在主站与管理台是同一个身份（角色决定能否进管理台）。
 
 ## 快速开始
 
@@ -27,8 +29,8 @@ npm run build      # 类型检查 + 生产构建，产物在 dist/
 npm run typecheck  # 仅做 TypeScript 类型检查
 ```
 
-首次启动后端会自动建库建表，并创建一个管理员：**admin / admin123456**（请及时修改）。
-管理台地址：<http://127.0.0.1:5173/admin>
+首次启动后端会自动建库建表，并创建一个**超级管理员**：**admin / admin123456**（请及时修改）。
+管理台地址：<http://127.0.0.1:5173/admin>（未登录时会先要求用管理台账号登录）
 
 配置在 `server/.env.local`（已被 .gitignore 忽略），可覆盖数据库、端口、模型与 Key：
 
@@ -52,10 +54,19 @@ DEEPSEEK_MODEL=deepseek-flash
 网址：<http://127.0.0.1:5173/admin>（未登录时会先要求用管理台账号登录）
 
 - **搜歌入库**：输入「歌名 歌手」甚至口语化描述（如"周杰伦那首关于妈妈的歌"），后端多源召回候选 → 模型裁决版本 → 展示候选卡片（封面 / 专辑 / 时长 / 体积 / 来源 / 置信度 / 模型理由 / 风险标记），确认后才下载入库；**曲库已有会直接提示**并高亮。
-  - **可随时停止**：搜索过程（多源召回 + 音源探测 + 模型裁决）通常 5–12 秒，期间按钮变为红色「停止搜索」，点击后前端中断请求、后端通过 `searchId` 立即中止整条流水线（不再继续消耗模型与音源请求）；服务端另有 40 秒超时兜底（`SEARCH_TIMEOUT_MS` 可配），保证任务不会一直跑。
+  - **可随时停止**：搜索/裁决期间按钮变为红色「停止搜索」，点击后前端中断请求、后端通过 `searchId` 立即中止整条流水线（不再继续消耗模型与音源请求）；两侧都有超时兜底（模型单次 20 秒、整次搜索 60 秒，可用 `DEEPSEEK_TIMEOUT_MS` / `SEARCH_TIMEOUT_MS` 调整）。
+  - **两阶段返回，先快后准**：实测裁决模型耗时 3–20 秒且波动极大（同一查询可能 3 秒也可能 20 秒），所以 `/search` 只做「召回 + 音源探测 + 规则打分」，**1–3 秒**返回候选并立刻渲染（卡片上显示「模型裁决中…」）；界面渲染完再调 `/judge` 补模型裁决，到达后更新为「模型已裁决」+ 模型理由，超时则显示「已退回规则判定」，**结果依然可用**。
+  - **查询理解按需触发**：「歌名 歌手」这类规矩输入用规则拆分（并自动纠正「歌手 歌名」的顺序，例如输入"周杰伦 晴天"会识别为 晴天/周杰伦），只有单个词或口语化描述才调模型——实测这一项能省掉 1–20 秒。
 - **本地上传**：拖入音频文件，自动读取 ID3 标签；标签缺失时用文件名 + 在线检索补全专辑、封面、歌词，并自动归档到对应歌手与专辑；重复上传会命中去重。
 - **曲库管理**：列表 / 搜索 / 按"可播放 / 仅元数据"筛选、编辑元数据、删除（同时清理本地文件）。
-- **账号管理**：账号列表（角色、注册时间、最后登录）、新建账号并直接指定角色、提升 / 降级管理员、重置密码、删除账号。安全护栏：不能取消自己的管理员权限、不能删除当前登录账号、系统始终保留至少一个管理员。
+- **账号管理**：列出**全部账号**（含主站注册的普通用户），支持按账号/昵称搜索、按角色筛选、新建账号并直接指定角色、设置角色、重置密码、删除账号。
+  - **三级角色**：
+    | 角色 | 能进管理台 | 授予/撤销管理员 | 说明 |
+    | --- | --- | --- | --- |
+    | `superadmin` 超级管理员 | ✅ | ✅（可给任何人） | 不可被降级、不可被删除 |
+    | `admin` 管理员 | ✅ | ❌ | 管理曲库与普通用户 |
+    | `user` 普通用户 | ❌ | ❌ | 主站注册的默认角色 |
+  - **安全护栏**（后端强制，前端同步禁用按钮并说明原因）：只有超级管理员能授予/撤销管理员权限；超级管理员不可被降级或删除；不能修改自己的角色；管理员账号的密码只有超管能重置（防止管理员改密码接管他人账号）；不能删除当前登录账号；系统始终保留至少一个超管与一个管理员。
 - **无音源曲目的处理**：条目存在但音源取不到（例如周杰伦在网易云整库缺失）时，候选会被标成 **音源不可用**、置信度封顶 35 且不可入库，可用「仅元数据入库」保留专辑结构 + 官方跳转链接，或走本地上传补齐音频。
 
 ### 音源策略（依据实测）
@@ -81,14 +92,19 @@ DEEPSEEK_MODEL=deepseek-flash
 
 ## 功能一览
 
-- **登录 / 注册**：弹窗式表单，账号校验（2-16 位）、密码长度校验、错误提示、登录态持久化；未登录时点击收藏/喜欢/建歌单会引导登录。
+- **登录 / 注册**：弹窗式表单，账号校验（2-16 位）、密码长度校验、错误提示、登录态持久化（JWT 存 localStorage，刷新后自动向后端校验一次）；未登录时点击收藏/喜欢/建歌单会引导登录。**账号与管理台共用**，即同一个账号在主站与管理台是同一身份。
+  - 主站注册固定为 `user` 角色；管理员只能在管理台里由已有管理员创建/授予。
+  - 后端未启动时会明确提示「无法连接服务器」，不会再静默失败。
 - **首页**：自动轮播 Banner（每日推荐 / 新歌速递 / 摇滚现场）、推荐歌单网格、最新音乐列表、排行榜卡片，均支持直接播放。
 - **歌单**：
   - 8 个官方主题歌单（详情页含封面、创建者、标签、播放量、播放全部与收藏）；
   - **创建歌单**：侧边栏「我的歌单」右侧 `+` 或任意弹窗里的「新建歌单」，可填写名称与简介；
   - **编辑歌单**：歌单页「编辑歌单」可改名、改简介、删除歌单；
   - **添加 / 移除歌曲**：歌曲行悬停出现 `+`（添加到歌单），我创建的歌单里悬停出现 `×`（移出歌单）；所有操作都有轻提示反馈。
-- **喜欢 / 收藏**：歌曲红心、歌单收藏，均跟随账号保存；侧边栏分「我的歌单」「收藏的歌单」两组。
+- **喜欢 / 收藏**：歌曲红心、歌单收藏，均跟随账号保存到后端；侧边栏分「我的歌单」「收藏的歌单」两组。
+- **我的音乐跨设备同步**：喜欢 / 收藏 / 自建歌单 / 最近播放全部存在后端 `users` 关联表里（`user_songs`、`user_playlists`、`user_playlist_songs`、`user_collected_playlists`），**换浏览器或清缓存都不会丢**。写操作采用乐观更新（先改界面再落库，失败自动回滚）并给出错误提示。
+  - 未登录时「最近播放」仍按设备记在本地；登录后自动切到账号维度。
+  - 老用户之前留在 localStorage 的「我的音乐」数据会在首次登录/注册时**自动迁移到后端**（只补空缺，不覆盖后端已有数据，且可重复执行不会产生重复）。
 - **搜索**：顶部搜索框 + 结果页，支持「单曲 / 歌单 / 歌手」三个维度与搜索历史、热门搜索。
 - **播放**：底部固定播放条，封面旋转环、红心、上一首/下一首、播放/暂停、**可拖拽进度条（含时间气泡、点击跳转）**、音量条与静音、播放模式（列表循环 / 单曲循环 / 随机播放）。
 - **全屏歌词页**（点击播放条左侧的歌曲卡片进入，也可从队列抽屉点「全屏歌词」）：
@@ -106,24 +122,26 @@ DEEPSEEK_MODEL=deepseek-flash
 src/
 ├─ components/     # TopBar、Sidebar、PlayerBar、PlayerControls、SongList、QueueDrawer、
 │                  # LyricsView（全屏歌词页）、AuthModal、PlaylistModal、AddToPlaylistModal、
-│                  # Toaster、Slider、Cover、Icons…
+│                  # SyncBanner（同步失败提示）、Toaster、Slider、Cover、Icons…
 ├─ data/           # songs.ts（20 首本地曲库）、playlists.ts（8 个官方歌单）
 ├─ hooks/          # useRequireLogin（登录守卫）、useLyrics（LRC 加载与解析）
-├─ lib/            # db.ts（主站 localStorage 数据层）、adminApi.ts（管理台接口客户端）
+├─ lib/            # db.ts（authApi 封装 /api/auth/*、meApi 封装 /api/me/*）、adminApi.ts（管理台接口客户端）
 ├─ pages/          # Home、Search、PlaylistDetail、Likes、Collection、Recent、Ranking、Artists…
 │  └─ admin/       # AdminConsole（搜歌入库 / 本地上传 / 曲库管理）
-├─ store/          # auth / library / player / ui / theme
+├─ store/          # auth / library（我的音乐，对接 /api/me/*）/ migrate（旧数据迁移）/ player / ui / theme
 ├─ styles/         # base / layout / components / pages / lyrics / theme-dark / admin
 └─ utils/          # 时间与数字格式化、LRC 解析
 server/
 ├─ .env.local      # 本机配置（数据库、端口、模型 Key），已被 gitignore
 └─ src/
    ├─ index.js     # Express 入口：鉴权、曲库 API、管理端 API、静态媒体
-   ├─ db.js        # MySQL 连接池 + 建库建表（users/artists/albums/songs/import_tasks）
-   ├─ auth.js      # JWT + bcrypt + 角色中间件 + 种子管理员
+   ├─ db.js        # MySQL 连接池 + 建库建表（users/artists/albums/songs/import_tasks
+   │               #   + user_songs/user_playlists/user_playlist_songs/user_collected_playlists）
+   ├─ auth.js      # JWT + bcrypt + 三级角色中间件（superadmin/admin/user）+ 种子管理员
    ├─ music/       # sources（多源适配）· normalize（实体归一化与打分）· agent（模型裁决）
    │               # importer（候选召回 / 下载入库 / 本地上传归档）
    └─ routes/      # library.js（曲库读）· admin.js（搜索、入库、上传、管理、封面代理）
+                   # me.js（「我的音乐」私有数据：喜欢/收藏/歌单/最近播放）
 public/
 ├─ music/          # 音频（本地存储）
 ├─ covers/         # 专辑封面
@@ -144,13 +162,17 @@ node scripts/gen-songs-data.mjs     # 生成 src/data/songs.ts
 
 ## 说明与后续计划
 
-- 音乐站主站的账号仍是 localStorage 演示实现；**管理台走后端真实 JWT + 角色**（第一个注册的账号或种子 admin 为管理员）。
+- 音乐站主站与管理台**共用后端账号体系**（MySQL `users` 表 + bcrypt + JWT）；主站注册一律 `user` 角色，管理员由管理台授予。
+  - 角色分三级：`superadmin`（超级管理员，唯一能授予/撤销管理员权限的角色，且自己不可被降级）、`admin`（管理员）、`user`（普通用户）。系统始终至少保留一个超级管理员。
+- 「我的音乐」私有数据（喜欢 / 收藏 / 自建歌单 / 最近播放）**已全部迁到后端**，存在 `users` 的关联表里，换浏览器/清缓存不再丢；旧版 localStorage 数据会在首次登录时自动迁移。
 - 媒体文件全部在本地磁盘，MySQL 只存元数据与相对路径；管理台删歌会同时清理本地文件。
-- 后端接口：`/api/health`、`/api/auth/*`、`/api/library/*`（曲库读）、`/api/admin/*`（搜索/入库/上传/管理/封面代理），前端通过 Vite 代理走同源 `/api`。
-- 数据表：`users`（账号与角色）、`artists`、`albums`、`songs`（含 `playable` / `external_url` / `source`）、`import_tasks`（入库任务与进度）。
+- 后端接口：`/api/health`、`/api/auth/*`（`register` 管理台注册 / `register-user` 主站注册 / `login` / `me`）、`/api/library/*`（曲库读）、`/api/admin/*`（搜索/入库/上传/管理/封面代理）、`/api/me/*`（我的音乐，全部需登录），前端通过 Vite 代理走同源 `/api`。
+  - `/api/me/*`：`GET /library` 一次拉全部；`POST /likes/:songId`、`POST /collected/:playlistId` 切换状态；`POST|DELETE /recent`；`POST|PATCH|DELETE /playlists[/:id]`、`POST|DELETE /playlists/:id/songs[/:songId]`。所有歌单写操作都会先校验归属，改别人的歌单返回 404。
+- 数据表：`users`（账号与角色）、`artists`、`albums`、`songs`（含 `playable` / `external_url` / `source`）、`import_tasks`（入库任务与进度）、`user_songs`（喜欢 + 最近播放，用 `kind` 区分）、`user_playlists`（自建歌单）、`user_playlist_songs`（歌单内歌曲）、`user_collected_playlists`（收藏的官方歌单）。
+  - 这些表对 `users` 都是 `ON DELETE CASCADE`（删账号即清数据）；但**刻意不对 `songs` 加外键** —— `song_id` 存的是前端 `Song.id`（音源侧 ID 字符串），且静态兜底曲库里的歌可能还没入库，加外键会导致管理台删歌时连带清掉用户数据。
 - 播放器使用单例 `HTMLAudioElement`，路由切换时播放不中断；刷新页面会重置播放状态。
 - **进度条交互**：按住拖动时音乐 60ms 淡出并暂停、进度条与时间只做预览（不会边拖边切歌、也不会有杂音），**松手才定位一次**并淡入继续播放；原本暂停时拖动则保持暂停。单次定位会先 45ms 淡出、等 `seeked` 后再 90ms 淡入，用来盖住 MP3 解码器定位的预卷残响与切换爆音（`src/store/player.ts` 的 `beginScrub` / `endScrub` / `seek`）。
 - 主题通过 `<html data-theme="dark">` + CSS 变量实现（`src/styles/theme-dark.css` 只覆盖变量与少量组件），没有引入任何 UI 库或 CSS-in-JS。
-- 后续可扩展：把主站账号迁到后端、入库任务改用 SSE 推送、多歌手（合唱）关系表、歌单封面自选与拖拽排序、MV、评论、每日推荐个性化、移动端适配打磨。
+- 后续可扩展：入库任务改用 SSE 推送，多歌手（合唱）关系表、歌单封面自选与拖拽排序、MV、评论、每日推荐个性化、移动端适配打磨。
 
 > 本项目仅用于本地学习与非商用演示；音频资源的版权归各权利人所有。曲库管理台只对接公开可访问的音源，不包含任何绕过版权保护的措施。

@@ -17,6 +17,7 @@ export default function PlaylistModal() {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!modal) return;
@@ -38,7 +39,7 @@ export default function PlaylistModal() {
 
   const isEdit = modal.mode === 'edit' && editing;
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const name = title.trim();
     if (!name) {
@@ -49,25 +50,36 @@ export default function PlaylistModal() {
       setError('歌单名称最多 30 个字');
       return;
     }
-    if (isEdit && editing) {
-      updatePlaylist(editing.id, { title: name, desc });
-      toast('歌单信息已更新');
-    } else {
-      const created = createPlaylist(name, desc);
-      if (!created) {
-        setError('创建失败，请先登录');
-        return;
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (isEdit && editing) {
+        await updatePlaylist(editing.id, { title: name, desc });
+        toast('歌单信息已更新');
+      } else {
+        const created = await createPlaylist(name, desc);
+        if (!created) {
+          setError(useLibrary.getState().error || '创建失败，请先登录');
+          return;
+        }
+        toast(`歌单「${created.title}」创建成功`);
       }
-      toast(`歌单「${created.title}」创建成功`);
+      close();
+    } finally {
+      setBusy(false);
     }
-    close();
   };
 
-  const handleDelete = () => {
-    if (!editing) return;
-    deletePlaylist(editing.id);
-    toast(`已删除歌单「${editing.title}」`);
-    close();
+  const handleDelete = async () => {
+    if (!editing || busy) return;
+    setBusy(true);
+    try {
+      await deletePlaylist(editing.id);
+      toast(`已删除歌单「${editing.title}」`);
+      close();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -113,12 +125,12 @@ export default function PlaylistModal() {
 
           <div className="modal-actions">
             {isEdit ? (
-              <button type="button" className="btn btn-danger-ghost" onClick={handleDelete}>
+              <button type="button" className="btn btn-danger-ghost" onClick={handleDelete} disabled={busy}>
                 删除歌单
               </button>
             ) : null}
-            <button type="submit" className="btn btn-primary">
-              {isEdit ? '保存修改' : '创建歌单'}
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? '处理中…' : isEdit ? '保存修改' : '创建歌单'}
             </button>
           </div>
         </form>
