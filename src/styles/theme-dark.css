@@ -1,0 +1,172 @@
+/**
+ * 深色主题：覆盖 :root 变量 + 少量需要单独处理的组件。
+ * 通过 <html data-theme="dark"> 生效，切换由 store/theme.ts 负责。
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --green: #31c27c;
+  --green-600: #2aa96b;
+  /* 仍用于白色按钮上的文字，保持深绿 */
+  --green-700: #229356;
+  /* 深色背景上的绿色文字要更亮 */
+  --green-strong: #4fd996;
+  --green-50: rgba(49, 194, 124, 0.16);
+  --red: #ff6b6b;
+
+  --text-1: #f2f3f5;
+  --text-2: #d2d5da;
+  --text-3: #a6aab1;
+  --text-4: #878b93;
+  --text-5: #6b6f77;
+
+  --line: #25272c;
+  --line-2: #33363d;
+
+  --bg: #16181c;
+  --bg-2: #1e2126;
+  --bg-3: #1f2229;
+  --bg-elevated: #2a2d34;
+  --bg-hover: #262a31;
+
+  --rail: #3a3d44;
+  --scroll-thumb: #3a3d44;
+  --danger-50: rgba(255, 107, 107, 0.16);
+
+  --shadow-1: 0 2px 12px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* 顶栏 / 播放条：半透明毛玻璃底色换成深色 */
+[data-theme='dark'] .topbar {
+  background: rgba(22, 24, 28, 0.92);
+}
+
+[data-theme='dark'] .player {
+  background: rgba(22, 24, 28, 0.96);
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='dark'] .queue-drawer {
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.45);
+}
+
+/* 头图卡片：浅色渐变改为深色渐变 */
+[data-theme='dark'] .detail-head,
+[data-theme='dark'] .artist-head {
+  background: linear-gradient(180deg, #1e2126 0%, #1a1d22 100%);
+}
+
+/* 横幅 / 头图降低亮度与饱和度，夜里不刺眼（brightness 对文字与背景等比缩放，对比度不变） */
+[data-theme='dark'] .banner,
+[data-theme='dark'] .likes-head {
+  filter: brightness(0.78) saturate(0.88);
+}
+
+/* VIP 金色按钮在深色下柔和一些 */
+[data-theme='dark'] .vip-btn {
+  color: #f2d9a6;
+  background: linear-gradient(135deg, #4a3d24 0%, #6a5529 100%);
+}
+
+/* 封面上悬浮的白色按钮改成深色浮层 */
+[data-theme='dark'] .playlist-play {
+  color: var(--green-strong);
+}
+
+/* 焦点态输入框 */
+[data-theme='dark'] .auth-field input,
+[data-theme='dark'] .modal-textarea {
+  background: var(--bg-2);
+  color: var(--text-1);
+}
+
+[data-theme='dark'] .auth-field input::placeholder,
+[data-theme='dark'] .modal-textarea::placeholder,
+[data-theme='dark'] .search-input::placeholder {
+  color: var(--text-5);
+}
+
+/* 拖拽中 / 悬浮时的细节 */
+[data-theme='dark'] .player-card:hover,
+[data-theme='dark'] .user-trigger:hover,
+[data-theme='dark'] .icon-btn:hover,
+[data-theme='dark'] .auth-close:hover {
+  background: var(--bg-hover);
+}
+
+[data-theme='dark'] .slider-thumb {
+  background: #f2f3f5;
+}
+
+[data-theme='dark'] .song-play {
+  background: rgba(49, 194, 124, 0.2);
+}
+
+/* 主题切换按钮 */
+.theme-switch {
+  position: relative;
+}
+
+.theme-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  border: 1px solid var(--line-2);
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.theme-btn:hover,
+.theme-btn.is-active {
+  color: var(--green-strong);
+  border-color: var(--green);
+  background: var(--green-50);
+}
+
+.theme-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  width: 170px;
+  padding: 6px;
+  z-index: 60;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+}
+
+.theme-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.theme-item:hover {
+  background: var(--bg-hover);
+}
+
+.theme-item.is-active {
+  color: var(--green-strong);
+  background: var(--green-50);
+}
+
+.theme-item-icon {
+  display: inline-flex;
+  color: inherit;
+}
+
+.theme-item-label {
+  flex: 1;
+}

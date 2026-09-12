@@ -1,0 +1,564 @@
+/* ---------- 首页 ---------- */
+.rank-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.rank-card {
+  position: relative;
+  padding: 18px 18px 60px;
+  border-radius: 14px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.rank-card:hover {
+  box-shadow: var(--shadow-1);
+  transform: translateY(-2px);
+}
+
+.rank-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.rank-info {
+  min-width: 0;
+}
+
+.rank-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.rank-title:hover {
+  color: var(--green);
+}
+
+.rank-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-4);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rank-count {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-5);
+}
+
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rank-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.rank-item:hover {
+  background: var(--bg-3);
+}
+
+.rank-item:hover .rank-song {
+  color: var(--green);
+}
+
+.rank-song {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-artist {
+  color: var(--text-4);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-no {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-no-1 {
+  color: #ff5a5a;
+}
+
+.rank-no-2 {
+  color: #ff8f3c;
+}
+
+.rank-no-3 {
+  color: #f0b429;
+}
+
+.rank-play {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.rank-play:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ---------- 歌单详情 ---------- */
+.detail-head,
+.artist-head {
+  display: flex;
+  gap: 28px;
+  padding: 28px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f5f7f8 0%, #fbfcfc 100%);
+  border: 1px solid var(--line);
+}
+
+.detail-cover,
+.artist-head-cover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+}
+
+.detail-info,
+.artist-head-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.detail-tag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(49, 194, 124, 0.12);
+  color: var(--green-strong);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.25;
+}
+
+.detail-creator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.detail-desc {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-4);
+  line-height: 1.7;
+}
+
+.detail-tags {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-tags .tag {
+  margin-right: 0;
+}
+
+.detail-stat {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+/* ---------- 我喜欢的音乐 ---------- */
+.likes-head {
+  position: relative;
+  padding: 34px 32px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(120deg, #2bb673 0%, #59d19a 100%);
+  overflow: hidden;
+}
+
+.likes-head::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.likes-info {
+  position: relative;
+  z-index: 1;
+}
+
+.likes-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 12px;
+}
+
+.likes-title {
+  margin-top: 14px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.likes-desc {
+  margin-top: 8px;
+  font-size: 13px;
+  opacity: 0.92;
+}
+
+.likes-head .detail-actions .btn-outline {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.likes-head .detail-actions .btn-outline:hover {
+  background: rgba(255, 255, 255, 0.26);
+  color: #fff;
+}
+
+.likes-head .btn-primary {
+  background: #fff;
+  color: var(--green-700);
+}
+
+.likes-head .btn-primary:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+/* ---------- 歌手 ---------- */
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 22px 16px;
+}
+
+.artist-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 8px;
+  border-radius: 12px;
+  text-align: center;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.artist-card:hover {
+  background: var(--bg-2);
+  transform: translateY(-2px);
+}
+
+.artist-avatar {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-1);
+}
+
+.artist-avatar .cover {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.artist-name {
+  font-size: 14px;
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.artist-count {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.artist-head-cover {
+  border-radius: 50%;
+}
+
+/* ---------- 排行榜页 ---------- */
+.ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.ranking-card {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 26px;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  transition: box-shadow 0.2s ease;
+}
+
+.ranking-card:hover {
+  box-shadow: var(--shadow-1);
+}
+
+.ranking-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ranking-title {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.ranking-title:hover {
+  color: var(--green);
+}
+
+.ranking-desc {
+  font-size: 12px;
+  color: var(--text-4);
+  line-height: 1.6;
+}
+
+.ranking-count {
+  font-size: 12px;
+  color: var(--text-5);
+}
+
+.ranking-songs {
+  display: flex;
+  flex-direction: column;
+}
+
+.ranking-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1.6fr) minmax(0, 1fr) 60px;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ranking-row:hover {
+  background: var(--bg-2);
+}
+
+.ranking-row:hover .ranking-song-name {
+  color: var(--green);
+}
+
+.ranking-song-name {
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-song-artist {
+  color: var(--text-4);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ranking-song-time {
+  text-align: right;
+  color: var(--text-5);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 搜索 ---------- */
+.page-tip {
+  margin: -6px 0 14px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.search-panel {
+  margin-bottom: 26px;
+}
+
+.keyword-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.keyword {
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--text-3);
+  font-size: 13px;
+  transition: all 0.16s ease;
+}
+
+.keyword:hover {
+  background: var(--green-50);
+  color: var(--green-strong);
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 1180px) {
+  .playlist-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .artist-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .rank-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .banner {
+    padding: 0 36px;
+  }
+
+  .banner-art {
+    width: 300px;
+  }
+
+  .banner-dots {
+    left: 36px;
+  }
+}
+
+@media (max-width: 980px) {
+  .sidebar,
+  .player-right,
+  .nav {
+    display: none;
+  }
+
+  .player-inner {
+    grid-template-columns: 1fr 1.4fr;
+  }
+
+  .queue-drawer {
+    width: 320px;
+  }
+
+  .detail-head,
+  .artist-head {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .detail-tag,
+  .detail-actions {
+    align-self: center;
+  }
+}
+
+@media (max-width: 760px) {
+  .playlist-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .artist-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rank-grid,
+  .ranking-card {
+    grid-template-columns: 1fr;
+  }
+
+  .banner {
+    height: auto;
+    padding: 28px 24px 46px;
+  }
+
+  .banner-art {
+    display: none;
+  }
+
+  .banner-title {
+    font-size: 30px;
+  }
+
+  .songlist-head,
+  .song-row {
+    grid-template-columns: 44px minmax(0, 1fr) 80px;
+  }
+
+  .col-album,
+  .col-artist {
+    display: none;
+  }
+}

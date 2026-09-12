@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+.npm-cache
+.probe
+scripts/songs.json
+server/.env
+server/.env.local
+*.local
+.DS_Store
+
+# 版权音频与封面不入库（本地学习资源，克隆后可在管理台重新入库或本地上传补齐）
+public/music
+public/covers
