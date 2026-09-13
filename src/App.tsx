@@ -16,6 +16,7 @@ import Search from './pages/Search';
 import Likes from './pages/Likes';
 import Collection from './pages/Collection';
 import Recent from './pages/Recent';
+import Stats from './pages/Stats';
 import Ranking from './pages/Ranking';
 import Artists from './pages/Artists';
 import ArtistDetail from './pages/ArtistDetail';
@@ -23,19 +24,25 @@ import NotFound from './pages/NotFound';
 import AdminConsole from './pages/admin/AdminConsole';
 import { useAuth } from './store/auth';
 import { useCatalog } from './store/catalog';
+import { useFeaturedPlaylists } from './store/featuredPlaylists';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 export default function App() {
   const boot = useAuth((s) => s.boot);
   const loadCatalog = useCatalog((s) => s.load);
+  const loadFeaturedPlaylists = useFeaturedPlaylists((s) => s.load);
   const location = useLocation();
-
-  // 管理台入库写的是 MySQL + public/ 音频，所以曲库要从后端接口加载
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
-
+  // 全局播放快捷键（空格 / 方向键 / M / L），管理台里也挂着但不影响输入
+  useKeyboardShortcuts();
   // 管理台使用独立布局（不带播放条 / 侧边栏）
   const isAdminRoute = location.pathname.startsWith('/admin');
+
+  // 管理台入库写的是 MySQL + public/ 音频，所以曲库要从后端接口加载。
+  // 从管理台返回主站时会重新取数，让刚维护的歌手、专辑和推荐歌单立即生效。
+  useEffect(() => {
+    void loadCatalog();
+    void loadFeaturedPlaylists();
+  }, [loadCatalog, loadFeaturedPlaylists, isAdminRoute]);
 
   useEffect(() => {
     boot();
@@ -70,6 +77,7 @@ export default function App() {
               <Route path="/likes" element={<Likes />} />
               <Route path="/collection" element={<Collection />} />
               <Route path="/recent" element={<Recent />} />
+              <Route path="/stats" element={<Stats />} />
               <Route path="/ranking" element={<Ranking />} />
               <Route path="/artists" element={<Artists />} />
               <Route path="/artist/:name" element={<ArtistDetail />} />

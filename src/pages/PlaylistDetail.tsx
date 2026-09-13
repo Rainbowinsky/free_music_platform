@@ -3,6 +3,7 @@ import Cover from '../components/Cover';
 import SongList from '../components/SongList';
 import Empty from '../components/Empty';
 import { PLAYLIST_MAP, playlistSongs } from '../data/playlists';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
 import { useSongMap } from '../store/catalog';
 import { usePlayer } from '../store/player';
 import { useAuth } from '../store/auth';
@@ -15,7 +16,8 @@ import { HeartFilledIcon, HeartIcon, PlayIcon } from '../components/Icons';
 export default function PlaylistDetail() {
   const { id = '' } = useParams();
   const userPlaylist = useLibrary((s) => s.playlists.find((item) => item.id === id));
-  const staticPlaylist = PLAYLIST_MAP[id];
+  const featuredPlaylists = useFeaturedPlaylistItems();
+  const staticPlaylist = featuredPlaylists.find((item) => item.id === id) || PLAYLIST_MAP[id];
 
   const playQueue = usePlayer((s) => s.playQueue);
   const user = useAuth((s) => s.user);

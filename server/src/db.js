@@ -79,6 +79,32 @@ const TABLES = [
     CONSTRAINT fk_song_album FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='曲库'`,
 
+  `CREATE TABLE IF NOT EXISTS featured_playlists (
+    id VARCHAR(64) NOT NULL COMMENT '前端可路由的歌单 ID',
+    title VARCHAR(120) NOT NULL,
+    description VARCHAR(500) NOT NULL DEFAULT '',
+    cover VARCHAR(255) NOT NULL DEFAULT '',
+    tags JSON NULL,
+    creator VARCHAR(80) NOT NULL DEFAULT 'QQ音乐官方',
+    play_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    visible TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_featured_visible_sort (visible, sort_order, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='首页推荐歌单'`,
+
+  `CREATE TABLE IF NOT EXISTS featured_playlist_songs (
+    playlist_id VARCHAR(64) NOT NULL,
+    song_id VARCHAR(64) NOT NULL COMMENT '歌曲来源侧 ID，与前端 Song.id 一致',
+    position INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (playlist_id, song_id),
+    KEY idx_featured_song_order (playlist_id, position),
+    CONSTRAINT fk_featured_playlist FOREIGN KEY (playlist_id) REFERENCES featured_playlists (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='首页推荐歌单歌曲'`,
+
   `CREATE TABLE IF NOT EXISTS import_tasks (
     id CHAR(36) NOT NULL,
     action VARCHAR(24) NOT NULL DEFAULT 'import' COMMENT 'import / upload',
@@ -147,6 +173,33 @@ const TABLES = [
     KEY idx_user_created (user_id, created_at),
     CONSTRAINT fk_ucp_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏的官方歌单'`,
+
+  /*
+   * 播放埋点：每「真正听完一段」记一行，用于听歌统计。
+   *
+   * 为什么不复用 user_songs(kind='recent')？因为那是「最近播放列表」，
+   * 走的是先删后插 + 只保留 100 条，**播放次数和播放时间全部丢失**，
+   * 统计不出「最常听的歌手」这类聚合结果。
+   *
+   * 这里刻意把 title/artist/duration **反范式**存下来，而不是靠 song_id 关联 songs 表：
+   *   1. song_id 是前端 Song.id（来源侧 ID），静态兜底曲库里的歌根本没入库；
+   *   2. 管理台删歌时不能连带把历史统计删掉——统计是"发生过的事实"。
+   * 代价是歌名改了历史记录不会跟着变，对统计而言可以接受。
+   */
+  `CREATE TABLE IF NOT EXISTS play_events (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    song_id VARCHAR(64) NOT NULL COMMENT '前端 Song.id（来源侧 ID）',
+    title VARCHAR(255) NOT NULL DEFAULT '',
+    artist VARCHAR(255) NOT NULL DEFAULT '',
+    duration INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '秒，用于累计时长',
+    played_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_pe_user_time (user_id, played_at),
+    KEY idx_pe_user_artist (user_id, artist),
+    KEY idx_pe_user_song (user_id, song_id),
+    CONSTRAINT fk_playevent_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='播放埋点（听歌统计用）'`,
 ];
 
 /** 建库 + 建表（幂等，可重复执行） */

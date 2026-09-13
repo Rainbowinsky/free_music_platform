@@ -2,11 +2,16 @@ import { create } from 'zustand';
 import type { PlayMode, Song } from '../types';
 import { store } from '../lib/db';
 import { useLibrary } from './library';
+import { indexOfSong, insertAfterCurrent, moveInQueue } from '../utils/queue';
 
 /** 全局唯一的 audio 元素，路由切换时不中断播放 */
 const audio: HTMLAudioElement = new Audio();
 audio.preload = 'auto';
 audio.volume = store.getVolume();
+
+/** 上次关闭页面时的播放现场（可能为 null） */
+const restored = store.getPlayer();
+const restoredPos = store.getPlayerPos();
 
 interface PlayerState {
   queue: Song[];
@@ -39,6 +44,13 @@ interface PlayerState {
   endScrub: () => void;
   removeAt: (index: number) => void;
   clearQueue: () => void;
+  /**
+   * 「下一首播放」：把歌曲插到当前曲目之后。
+   * 队列里已有该曲时先摘出来再插，避免出现两条；返回 false 表示它正在播放、无需处理。
+   */
+  playNext: (song: Song) => boolean;
+  /** 拖动排序：把队列中 from 位置的曲目移到 to 位置 */
+  moveItem: (from: number, to: number) => void;
 }
 
 function sameSong(a: Song | null, b: Song | null): boolean {
@@ -57,6 +69,24 @@ let seeking = false;
 /** 是否正在拖动进度条，以及拖动前是否处于播放状态 */
 let scrubbing = false;
 let scrubWasPlaying = false;
+/** 上次把播放进度写盘的时间戳（毫秒），用于节流 */
+let lastPosSave = 0;
+/** 当前歌曲累计「真正听到」的秒数，用来判断是否够得上算一次播放 */
+let playedSeconds = 0;
+/** 本次播放是否已上报过（同一首歌只上报一次） */
+let playReported = false;
+/** 上一次 timeupdate 的进度，用于算增量 */
+let lastTimePos = 0;
+
+/**
+ * 算「听够多少秒才算一次播放」。
+ * 采用业界常见的 30 秒或半首歌取较小值，并给一个 5 秒下限，
+ * 这样快速切歌不会把统计刷高，短音频也不会永远统计不到。
+ */
+function playThreshold(duration: number): number {
+  if (!Number.isFinite(duration) || duration <= 0) return 30;
+  return Math.max(5, Math.min(30, duration * 0.5));
+}
 
 function cancelFade(): void {
   if (fadeTimer !== null) {
@@ -95,6 +125,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
     audio.volume = get().volume;
     audio.src = song.src;
     audio.currentTime = 0;
+    // 上一首的进度存档立刻作废，避免下次启动时错位到新歌上
+    store.clearPlayerPos();
+    lastPosSave = 0;
+    // 换歌后重新累计收听时长，新歌还没听够就不该算一次播放
+    playedSeconds = 0;
+    playReported = false;
+    lastTimePos = 0;
     set({
       current: song,
       progress: 0,
@@ -108,19 +145,57 @@ export const usePlayer = create<PlayerState>((set, get) => {
     }
   };
 
+  /** 把当前进度写盘（带曲目 ID，恢复时校验对得上才采用） */
+  const savePos = () => {
+    const song = get().current;
+    if (!song) return;
+    const pos = audio.currentTime;
+    if (!Number.isFinite(pos) || pos <= 0) return;
+    store.savePlayerPos({ songId: song.id, progress: pos });
+  };
+
   audio.addEventListener('timeupdate', () => {
     if (seeking) return;
-    set({ progress: audio.currentTime });
+    const pos = audio.currentTime;
+    set({ progress: pos });
+
+    // 累计真实收听时长：只认正常播放的小增量，跳转产生的大跳不计入
+    const delta = pos - lastTimePos;
+    lastTimePos = pos;
+    if (delta > 0 && delta < 2) playedSeconds += delta;
+
+    // 听够阈值就上报一次播放（同一首歌只上报一次）
+    if (!playReported) {
+      const song = get().current;
+      if (song && playedSeconds >= playThreshold(song.duration || audio.duration || 0)) {
+        playReported = true;
+        useLibrary.getState().recordPlay(song);
+      }
+    }
+
+    // 进度每 4 秒落一次盘即可，恢复精度够用又不会频繁写 localStorage
+    const now = Date.now();
+    if (now - lastPosSave > 4000) {
+      lastPosSave = now;
+      const song = get().current;
+      if (song && Number.isFinite(pos) && pos > 0) store.savePlayerPos({ songId: song.id, progress: pos });
+    }
   });
   audio.addEventListener('seeked', () => {
     seeking = false;
+    // 跳转后重置增量基准，否则这次大跳会被算成"听了很久"
+    lastTimePos = audio.currentTime;
     set({ progress: audio.currentTime });
   });
   audio.addEventListener('durationchange', () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) set({ duration: audio.duration });
   });
   audio.addEventListener('play', () => set({ isPlaying: true }));
-  audio.addEventListener('pause', () => set({ isPlaying: false }));
+  audio.addEventListener('pause', () => {
+    set({ isPlaying: false });
+    // 暂停是"用户可能马上关页面"的时刻，这里强制落一次盘
+    savePos();
+  });
   audio.addEventListener('loadedmetadata', () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) set({ duration: audio.duration });
   });
@@ -128,15 +203,15 @@ export const usePlayer = create<PlayerState>((set, get) => {
   audio.addEventListener('error', () => set({ isPlaying: false }));
 
   return {
-    queue: [],
-    index: -1,
-    current: null,
+    queue: restored?.queue ?? [],
+    index: restored?.index ?? -1,
+    current: restored ? restored.queue[restored.index] ?? null : null,
     isPlaying: false,
     progress: 0,
-    duration: 0,
+    duration: restored ? restored.queue[restored.index]?.duration || 0 : 0,
     volume: audio.volume,
     muted: audio.muted,
-    mode: 'loop',
+    mode: restored?.mode ?? 'loop',
     drawerOpen: false,
     lyricsOpen: false,
 
@@ -361,10 +436,75 @@ export const usePlayer = create<PlayerState>((set, get) => {
     clearQueue: () => {
       audio.pause();
       audio.removeAttribute('src');
+      // 落盘的清理交给下面的 subscribe（队列变空即删键），避免这里删完又被写回
       set({ queue: [], index: -1, current: null, isPlaying: false, progress: 0, duration: 0, lyricsOpen: false });
+    },
+
+    playNext: (song) => {
+      const { queue, current } = get();
+      // 正在播的就是它，没有"插队"的意义
+      if (current && current.id === song.id) return false;
+      const nextQueue = insertAfterCurrent(queue, current?.id, song);
+      set({ queue: nextQueue, index: indexOfSong(nextQueue, current?.id) });
+      return true;
+    },
+
+    moveItem: (from, to) => {
+      const { queue, index, current } = get();
+      if (from === to) return;
+      const nextQueue = moveInQueue(queue, from, to);
+      if (nextQueue === queue) return;
+      // 当前播放曲目的下标跟着一起挪（按 id 重算，避免算错导致进度条串台）
+      const nextIndex = current ? indexOfSong(nextQueue, current.id) : index;
+      set({ queue: nextQueue, index: nextIndex });
     },
   };
 });
+
+/* ── 持久化 ── */
+
+// 队列结构（队列 / 当前下标 / 播放模式）变化时写盘；队列清空则把键整个删掉，
+// 否则会留下一个空壳，既没意义又容易和"上次真的播过歌"混淆。
+usePlayer.subscribe((state, prev) => {
+  if (state.queue !== prev.queue || state.index !== prev.index || state.mode !== prev.mode) {
+    if (!state.queue.length) store.clearPlayer();
+    else store.savePlayer({ queue: state.queue, index: state.index, mode: state.mode });
+  }
+});
+
+// 关页面/切到后台时补一次进度，避免丢失最后几秒
+window.addEventListener('pagehide', () => {
+  const { current } = usePlayer.getState();
+  if (!current) return;
+  const pos = audio.currentTime;
+  if (Number.isFinite(pos) && pos > 0) store.savePlayerPos({ songId: current.id, progress: pos });
+});
+
+/**
+ * 还原上次的播放现场：把音源挂回 audio 并定位到上次的进度。
+ * 刻意不自动播放 —— 浏览器会拦截自动播放，而且用户打开页面未必想立刻出声。
+ */
+if (restored && restored.queue.length) {
+  const song = restored.queue[restored.index];
+  if (song?.src) {
+    audio.src = song.src;
+    const resumeAt = restoredPos && restoredPos.songId === song.id ? restoredPos.progress : 0;
+    if (resumeAt > 0) {
+      const applyResume = () => {
+        // 进度超过时长（例如换了音源）就放弃，避免跳到末尾
+        if (Number.isFinite(audio.duration) && audio.duration > 0 && resumeAt >= audio.duration - 1) return;
+        try {
+          audio.currentTime = resumeAt;
+        } catch {
+          return;
+        }
+        usePlayer.setState({ progress: resumeAt });
+      };
+      if (audio.readyState >= 1) applyResume();
+      else audio.addEventListener('loadedmetadata', applyResume, { once: true });
+    }
+  }
+}
 
 export const playModeLabel: Record<PlayMode, string> = {
   loop: '列表循环',

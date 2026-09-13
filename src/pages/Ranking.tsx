@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Cover from '../components/Cover';
-import { PLAYLISTS, playlistSongs } from '../data/playlists';
+import { playlistSongs } from '../data/playlists';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
 import { useSongMap } from '../store/catalog';
 import { usePlayer } from '../store/player';
 import { playModeLabel } from '../store/player';
@@ -11,6 +12,7 @@ export default function Ranking() {
   const playQueue = usePlayer((s) => s.playQueue);
   const mode = usePlayer((s) => s.mode);
   const songMap = useSongMap();
+  const playlists = useFeaturedPlaylistItems();
 
   return (
     <div className="page">
@@ -20,7 +22,7 @@ export default function Ranking() {
       </header>
 
       <div className="ranking-list">
-        {PLAYLISTS.map((playlist) => {
+        {playlists.map((playlist) => {
           const songs = playlistSongs(playlist, songMap);
           return (
             <section className="ranking-card" key={playlist.id}>

@@ -47,6 +47,37 @@ export const NextIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** 「下一首播放」：列表 + 播放三角，表示插队到当前曲目之后 */
+export const PlayNextIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="4.8" width="10" height="2.2" rx="1.1" />
+    <rect x="3" y="10.9" width="7" height="2.2" rx="1.1" />
+    <rect x="3" y="17" width="10" height="2.2" rx="1.1" />
+    <path d="M15.2 8.4c0-.8.9-1.3 1.6-.8l4.6 3.4c.6.4.6 1.3 0 1.7l-4.6 3.4c-.7.5-1.6 0-1.6-.8V8.4z" />
+  </Svg>
+);
+
+/** 拖拽手柄：两列圆点 */
+export const DragHandleIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="9" cy="6" r="1.5" />
+    <circle cx="15" cy="6" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" />
+    <circle cx="15" cy="12" r="1.5" />
+    <circle cx="9" cy="18" r="1.5" />
+    <circle cx="15" cy="18" r="1.5" />
+  </Svg>
+);
+
+/** 听歌统计：三根高低不同的柱子 */
+export const ChartIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.4" y="13" width="3.8" height="7.4" rx="1.2" />
+    <rect x="10.1" y="8" width="3.8" height="12.4" rx="1.2" />
+    <rect x="16.8" y="4" width="3.8" height="16.4" rx="1.2" />
+  </Svg>
+);
+
 export const HeartIcon = (p: IconProps) => (
   <Svg {...p}>
     <path
@@ -69,6 +100,20 @@ export const SearchIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="10.8" cy="10.8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
     <path d="M15.8 15.8L20.6 20.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </Svg>
+);
+
+/** 译文开关：地球 + 经线，表示「语言 / 翻译」 */
+export const TranslateIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M3.6 12h16.8" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path
+      d="M12 3.6c2.1 2.4 3.3 5.3 3.3 8.4s-1.2 6-3.3 8.4c-2.1-2.4-3.3-5.3-3.3-8.4S9.9 6 12 3.6z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+    />
   </Svg>
 );
 

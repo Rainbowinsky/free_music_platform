@@ -582,11 +582,246 @@
   line-height: 1.7;
 }
 
+.adm-upload-assets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.adm-asset-picker {
+  min-width: 0;
+  padding: 15px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  color: var(--text-2);
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.adm-asset-picker:hover:not(:disabled) {
+  border-color: var(--green);
+  background: var(--green-50);
+}
+
+.adm-asset-picker strong,
+.adm-asset-picker span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-asset-picker strong {
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.adm-asset-picker span {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-4);
+}
+
+.adm-upload-meta {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.adm-upload-meta-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.adm-upload-meta-head strong {
+  font-size: 14px;
+  color: var(--text-1);
+}
+
+.adm-upload-meta-head span {
+  font-size: 11px;
+  color: var(--text-4);
+}
+
+.adm-upload-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .adm-uploads {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
+.adm-entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.adm-entity-card,
+.adm-featured-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+}
+
+.adm-entity-info,
+.adm-featured-info {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.adm-entity-info strong,
+.adm-featured-info strong {
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-entity-info span,
+.adm-featured-info p,
+.adm-featured-info > span {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-4);
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-cover-editor {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 108px;
+}
+
+.adm-featured-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.adm-featured-card {
+  align-items: flex-start;
+}
+
+.adm-featured-info > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.adm-featured-info .adm-tag {
+  flex: none;
+}
+
+.adm-featured-modal {
+  max-width: 680px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.adm-song-picker {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.adm-song-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.adm-song-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.adm-song-picker-head .adm-input {
+  width: 210px;
+  min-width: 0;
+  height: 32px;
+}
+
+.adm-song-picker-list {
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.adm-song-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.adm-song-check:hover {
+  background: var(--bg-hover);
+}
+
+.adm-song-check span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-song-check em {
+  margin-left: 5px;
+  color: var(--text-4);
+  font-style: normal;
+}
+
+.adm-song-picker-empty {
+  margin: 0;
+  padding: 20px 12px;
+  color: var(--text-4);
+  font-size: 12px;
+  text-align: center;
+}
+
+.adm-song-picker-page {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--text-4);
+  font-size: 11px;
+}
+
 
 .adm-upload {
   padding: 14px;
@@ -872,6 +1107,17 @@ select.adm-input {
 }
 
 @media (max-width: 980px) {
+  .adm-upload-assets,
+  .adm-upload-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .adm-upload-meta-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
   .adm {
     grid-template-columns: 1fr;
   }

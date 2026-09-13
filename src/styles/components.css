@@ -178,7 +178,8 @@
 }
 
 .song-add,
-.song-remove {
+.song-remove,
+.song-next {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -191,11 +192,17 @@
 }
 
 .song-row:hover .song-add,
-.song-row:hover .song-remove {
+.song-row:hover .song-remove,
+.song-row:hover .song-next {
   opacity: 1;
 }
 
 .song-add:hover {
+  color: var(--green);
+  background: var(--green-50);
+}
+
+.song-next:hover {
   color: var(--green);
   background: var(--green-50);
 }
@@ -1153,5 +1160,87 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ---------- 加载骨架屏 ---------- */
+
+.sk {
+  display: block;
+  background: var(--bg-2);
+  border-radius: 4px;
+  animation: sk-pulse 1.4s ease-in-out infinite;
+}
+
+.sk-line {
+  height: 10px;
+}
+
+.sk-sm {
+  height: 8px;
+}
+
+.sk-no {
+  width: 16px;
+  height: 10px;
+}
+
+.sk-cover {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+}
+
+.sk-duration {
+  width: 34px;
+  margin-left: auto;
+}
+
+.sk-avatar {
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+}
+
+.sk-square {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+}
+
+/* 骨架行不可交互，也不响应 hover 高亮 */
+.skeleton-row,
+.skeleton-card {
+  pointer-events: none;
+}
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 8px;
+}
+
+.playlist-grid .skeleton-card {
+  align-items: stretch;
+  padding: 0;
+}
+
+@keyframes sk-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+    opacity: 0.65;
   }
 }

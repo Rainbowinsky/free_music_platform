@@ -9,12 +9,13 @@ import { config } from '../config.js';
 import { query, queryOne } from '../db.js';
 import { adminRequired, ROLE, roleRank, normalizeRole } from '../auth.js';
 import { agentStatus } from '../music/agent.js';
+import { artistKey, titleKey } from '../music/normalize.js';
 import { archiveUploadedFile, collectCandidates, importCandidate, judgeCandidates } from '../music/importer.js';
 
 const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 60 * 1024 * 1024 },
+  limits: { fileSize: 60 * 1024 * 1024, files: 3, fields: 8 },
 });
 
 /** 单次搜索/裁决的最长耗时：超时自动中止，避免任务一直跑 */
@@ -40,7 +41,7 @@ const mapSong = (row) => ({
   album: row.album_name || '',
   duration: row.duration,
   src: row.src,
-  cover: row.cover,
+  cover: row.cover || row.album_cover || '',
   lrc: row.lrc,
   source: row.source,
   sourceId: row.source_id,
@@ -85,6 +86,70 @@ const updateTask = (id, patch) => {
   }
   params.push(id);
   return query(`UPDATE import_tasks SET ${sets.join(', ')} WHERE id = ?`, params);
+};
+
+function detectImageExt(input) {
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input || []);
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return '';
+}
+
+async function saveCoverAsset(file, prefix) {
+  if (!file?.buffer?.length) {
+    const error = new Error('请选择封面图片');
+    error.status = 400;
+    throw error;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    const error = new Error('封面图片不能超过 10MB');
+    error.status = 400;
+    throw error;
+  }
+  const ext = detectImageExt(file.buffer);
+  if (!ext) {
+    const error = new Error('封面仅支持真实的 JPG、PNG 或 WebP 图片');
+    error.status = 400;
+    throw error;
+  }
+  const digest = crypto.createHash('sha1').update(file.buffer).digest('hex').slice(0, 12);
+  const filename = `${prefix}-${digest}.${ext}`;
+  await fs.mkdir(config.media.covers, { recursive: true });
+  await fs.writeFile(path.join(config.media.covers, filename), file.buffer);
+  return `/covers/${filename}`;
+}
+
+const parseTags = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean).map((tag) => String(tag).trim()).filter(Boolean).slice(0, 8);
+  return String(value || '')
+    .split(/[，,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+};
+
+const mapFeatured = (row, songIds = []) => {
+  let tags = [];
+  try {
+    const parsed = typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags;
+    tags = Array.isArray(parsed) ? parsed : [];
+  } catch {
+    tags = [];
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    cover: row.cover,
+    tags,
+    creator: row.creator,
+    playCount: Number(row.play_count || 0),
+    sortOrder: Number(row.sort_order || 0),
+    visible: Boolean(row.visible),
+    songIds,
+    createdAt: row.created_at,
+  };
 };
 
 /** 模型可用性 */
@@ -466,19 +531,267 @@ router.get('/tasks', adminRequired, async (_req, res) => {
   res.json({ items: rows.map(mapTask) });
 });
 
-/** 本地上传音频 → 自动识别归档 */
-router.post('/upload', adminRequired, upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: '请选择要上传的音频文件' });
+/** 本地完整归档：MP3 + 可选 LRC/封面 + 管理员自定义元数据，全程不依赖在线音乐平台 */
+router.post(
+  '/upload',
+  adminRequired,
+  upload.fields([
+    { name: 'audio', maxCount: 1 },
+    { name: 'lyrics', maxCount: 1 },
+    { name: 'cover', maxCount: 1 },
+    // 兼容旧前端使用的 file 字段
+    { name: 'file', maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const audio = req.files?.audio?.[0] || req.files?.file?.[0];
+    const lyrics = req.files?.lyrics?.[0];
+    const cover = req.files?.cover?.[0];
+    if (!audio) return res.status(400).json({ error: '请选择要上传的 MP3 文件' });
+    if (audio.size > 60 * 1024 * 1024) return res.status(400).json({ error: 'MP3 文件不能超过 60MB' });
+    if (lyrics && lyrics.size > 2 * 1024 * 1024) return res.status(400).json({ error: 'LRC 文件不能超过 2MB' });
+    if (cover && cover.size > 10 * 1024 * 1024) return res.status(400).json({ error: '封面图片不能超过 10MB' });
+    if (lyrics && !/\.lrc$/i.test(lyrics.originalname)) return res.status(400).json({ error: '歌词文件必须是 .lrc 格式' });
+    if (cover && !/\.(jpe?g|png|webp)$/i.test(cover.originalname)) {
+      return res.status(400).json({ error: '封面仅支持 JPG、PNG 或 WebP' });
+    }
+    try {
+      const result = await archiveUploadedFile({
+        buffer: audio.buffer,
+        filename: audio.originalname,
+        mimetype: audio.mimetype,
+        lyricsBuffer: lyrics?.buffer ?? null,
+        coverBuffer: cover?.buffer ?? null,
+        metadata: {
+          title: req.body?.title,
+          artist: req.body?.artist,
+          album: req.body?.album,
+          year: req.body?.year,
+        },
+      });
+      return res.json(result);
+    } catch (error) {
+      return res.status(error.status || 500).json({ error: error.message });
+    }
+  },
+);
+
+/** ─────────────────── 歌手 / 专辑管理 ─────────────────── */
+router.get('/artists', adminRequired, async (req, res) => {
+  const keyword = String(req.query.keyword || '').trim();
+  const params = [];
+  const where = keyword ? 'WHERE ar.name LIKE ?' : '';
+  if (keyword) params.push(`%${keyword}%`);
+  const rows = await query(
+    `SELECT ar.*, COUNT(DISTINCT s.id) AS song_count, COUNT(DISTINCT al.id) AS album_count
+       FROM artists ar
+       LEFT JOIN songs s ON s.artist_id = ar.id
+       LEFT JOIN albums al ON al.artist_id = ar.id
+       ${where}
+      GROUP BY ar.id
+      ORDER BY song_count DESC, ar.name ASC`,
+    params,
+  );
+  return res.json({
+    items: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      cover: row.cover,
+      songCount: Number(row.song_count || 0),
+      albumCount: Number(row.album_count || 0),
+      createdAt: row.created_at,
+    })),
+  });
+});
+
+router.patch('/artists/:id', adminRequired, async (req, res) => {
+  const artist = await queryOne('SELECT * FROM artists WHERE id = ?', [req.params.id]);
+  if (!artist) return res.status(404).json({ error: '歌手不存在' });
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: '歌手名称不能为空' });
+  const key = artistKey(name);
+  const same = await queryOne('SELECT id FROM artists WHERE name_key = ? AND id <> ?', [key, artist.id]);
+  if (same) return res.status(409).json({ error: '已有同名歌手，不能合并修改' });
+  await query('UPDATE artists SET name = ?, name_key = ? WHERE id = ?', [name, key, artist.id]);
+  // 单歌手曲目同步展示文本；合唱等保留原 artist_text，避免破坏署名。
+  await query('UPDATE songs SET artist_text = ? WHERE artist_id = ? AND artist_text = ?', [name, artist.id, artist.name]);
+  const updated = await queryOne('SELECT * FROM artists WHERE id = ?', [artist.id]);
+  return res.json({ artist: updated });
+});
+
+router.post('/artists/:id/cover', adminRequired, upload.single('cover'), async (req, res) => {
+  const artist = await queryOne('SELECT id FROM artists WHERE id = ?', [req.params.id]);
+  if (!artist) return res.status(404).json({ error: '歌手不存在' });
   try {
-    const result = await archiveUploadedFile({
-      buffer: req.file.buffer,
-      filename: req.file.originalname,
-      mimetype: req.file.mimetype,
-    });
-    return res.json(result);
+    const cover = await saveCoverAsset(req.file, `artist-${artist.id}`);
+    await query('UPDATE artists SET cover = ? WHERE id = ?', [cover, artist.id]);
+    return res.json({ cover });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(error.status || 500).json({ error: error.message });
   }
+});
+
+router.get('/albums', adminRequired, async (req, res) => {
+  const keyword = String(req.query.keyword || '').trim();
+  const params = [];
+  const where = keyword ? 'WHERE al.name LIKE ? OR ar.name LIKE ?' : '';
+  if (keyword) params.push(`%${keyword}%`, `%${keyword}%`);
+  const rows = await query(
+    `SELECT al.*, ar.name AS artist_name, COUNT(s.id) AS song_count
+       FROM albums al
+       LEFT JOIN artists ar ON ar.id = al.artist_id
+       LEFT JOIN songs s ON s.album_id = al.id
+       ${where}
+      GROUP BY al.id
+      ORDER BY al.updated_at DESC, al.id DESC`,
+    params,
+  );
+  return res.json({
+    items: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      artistId: row.artist_id,
+      artistName: row.artist_name || '',
+      cover: row.cover,
+      year: row.year,
+      songCount: Number(row.song_count || 0),
+      createdAt: row.created_at,
+    })),
+  });
+});
+
+router.patch('/albums/:id', adminRequired, async (req, res) => {
+  const album = await queryOne('SELECT * FROM albums WHERE id = ?', [req.params.id]);
+  if (!album) return res.status(404).json({ error: '专辑不存在' });
+  const name = String(req.body?.name || '').trim();
+  const year = String(req.body?.year ?? album.year ?? '').trim().slice(0, 8);
+  if (!name) return res.status(400).json({ error: '专辑名称不能为空' });
+  const key = titleKey(name);
+  const same = await queryOne('SELECT id FROM albums WHERE artist_id <=> ? AND name_key = ? AND id <> ?', [album.artist_id, key, album.id]);
+  if (same) return res.status(409).json({ error: '该歌手下已有同名专辑' });
+  await query('UPDATE albums SET name = ?, name_key = ?, year = ? WHERE id = ?', [name, key, year, album.id]);
+  const updated = await queryOne(
+    `SELECT al.*, ar.name AS artist_name FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id WHERE al.id = ?`,
+    [album.id],
+  );
+  return res.json({ album: updated });
+});
+
+router.post('/albums/:id/cover', adminRequired, upload.single('cover'), async (req, res) => {
+  const album = await queryOne('SELECT id FROM albums WHERE id = ?', [req.params.id]);
+  if (!album) return res.status(404).json({ error: '专辑不存在' });
+  try {
+    const cover = await saveCoverAsset(req.file, `album-${album.id}`);
+    await query('UPDATE albums SET cover = ? WHERE id = ?', [cover, album.id]);
+    // 专辑下歌曲没有独立封面时，后续读取自然会通过 album.cover 显示；已有单曲封面不强行覆盖。
+    return res.json({ cover });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+/** ─────────────────── 首页推荐歌单管理 ─────────────────── */
+async function featuredWithSongs(id) {
+  const row = await queryOne('SELECT * FROM featured_playlists WHERE id = ?', [id]);
+  if (!row) return null;
+  const links = await query(
+    'SELECT song_id FROM featured_playlist_songs WHERE playlist_id = ? ORDER BY position ASC, created_at ASC',
+    [id],
+  );
+  return mapFeatured(row, links.map((link) => link.song_id));
+}
+
+router.get('/featured-playlists', adminRequired, async (_req, res) => {
+  const rows = await query('SELECT * FROM featured_playlists ORDER BY sort_order ASC, created_at DESC');
+  const ids = rows.map((row) => row.id);
+  if (!ids.length) return res.json({ items: [] });
+  const links = await query(
+    `SELECT playlist_id, song_id FROM featured_playlist_songs WHERE playlist_id IN (${ids.map(() => '?').join(', ')}) ORDER BY playlist_id, position ASC, created_at ASC`,
+    ids,
+  );
+  const songMap = new Map(ids.map((id) => [id, []]));
+  for (const link of links) songMap.get(link.playlist_id)?.push(link.song_id);
+  return res.json({ items: rows.map((row) => mapFeatured(row, songMap.get(row.id) || [])) });
+});
+
+router.post('/featured-playlists', adminRequired, async (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  if (!title) return res.status(400).json({ error: '歌单标题不能为空' });
+  const id = `featured-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+  const [orderRow] = await query('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM featured_playlists');
+  await query(
+    `INSERT INTO featured_playlists (id, title, description, creator, tags, play_count, sort_order, visible)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      title,
+      String(req.body?.description || '').trim(),
+      String(req.body?.creator || 'QQ音乐官方').trim() || 'QQ音乐官方',
+      JSON.stringify(parseTags(req.body?.tags)),
+      Math.max(0, Number(req.body?.playCount) || 0),
+      req.body?.sortOrder === undefined ? Number(orderRow?.max_order || -1) + 1 : Number(req.body.sortOrder) || 0,
+      req.body?.visible === false ? 0 : 1,
+    ],
+  );
+  return res.status(201).json({ playlist: await featuredWithSongs(id) });
+});
+
+router.patch('/featured-playlists/:id', adminRequired, async (req, res) => {
+  const current = await queryOne('SELECT * FROM featured_playlists WHERE id = ?', [req.params.id]);
+  if (!current) return res.status(404).json({ error: '歌单不存在' });
+  const title = req.body?.title === undefined ? current.title : String(req.body.title).trim();
+  if (!title) return res.status(400).json({ error: '歌单标题不能为空' });
+  const patch = {
+    title,
+    description: req.body?.description === undefined ? current.description : String(req.body.description || '').trim(),
+    creator: req.body?.creator === undefined ? current.creator : String(req.body.creator || '').trim() || 'QQ音乐官方',
+    tags: req.body?.tags === undefined ? current.tags : JSON.stringify(parseTags(req.body.tags)),
+    playCount: req.body?.playCount === undefined ? current.play_count : Math.max(0, Number(req.body.playCount) || 0),
+    sortOrder: req.body?.sortOrder === undefined ? current.sort_order : Number(req.body.sortOrder) || 0,
+    visible: req.body?.visible === undefined ? current.visible : req.body.visible ? 1 : 0,
+  };
+  await query(
+    `UPDATE featured_playlists
+        SET title = ?, description = ?, creator = ?, tags = ?, play_count = ?, sort_order = ?, visible = ?
+      WHERE id = ?`,
+    [patch.title, patch.description, patch.creator, patch.tags, patch.playCount, patch.sortOrder, patch.visible, current.id],
+  );
+  return res.json({ playlist: await featuredWithSongs(current.id) });
+});
+
+router.delete('/featured-playlists/:id', adminRequired, async (req, res) => {
+  const result = await query('DELETE FROM featured_playlists WHERE id = ?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: '歌单不存在' });
+  return res.json({ ok: true });
+});
+
+router.post('/featured-playlists/:id/cover', adminRequired, upload.single('cover'), async (req, res) => {
+  const playlist = await queryOne('SELECT id FROM featured_playlists WHERE id = ?', [req.params.id]);
+  if (!playlist) return res.status(404).json({ error: '歌单不存在' });
+  try {
+    const cover = await saveCoverAsset(req.file, `featured-${playlist.id}`);
+    await query('UPDATE featured_playlists SET cover = ? WHERE id = ?', [cover, playlist.id]);
+    return res.json({ cover });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message });
+  }
+});
+
+router.put('/featured-playlists/:id/songs', adminRequired, async (req, res) => {
+  const playlist = await queryOne('SELECT id FROM featured_playlists WHERE id = ?', [req.params.id]);
+  if (!playlist) return res.status(404).json({ error: '歌单不存在' });
+  const requested = Array.isArray(req.body?.songIds) ? req.body.songIds.map((id) => String(id)).filter(Boolean) : [];
+  const songIds = [...new Set(requested)].slice(0, 500);
+  if (songIds.length) {
+    const rows = await query(`SELECT source_id FROM songs WHERE source_id IN (${songIds.map(() => '?').join(', ')})`, songIds);
+    const valid = new Set(rows.map((row) => String(row.source_id)));
+    const missing = songIds.filter((id) => !valid.has(id));
+    if (missing.length) return res.status(400).json({ error: `有 ${missing.length} 首歌曲不在曲库中，请刷新后重试` });
+  }
+  await query('DELETE FROM featured_playlist_songs WHERE playlist_id = ?', [playlist.id]);
+  for (const [position, songId] of songIds.entries()) {
+    await query('INSERT INTO featured_playlist_songs (playlist_id, song_id, position) VALUES (?, ?, ?)', [playlist.id, songId, position]);
+  }
+  return res.json({ playlist: await featuredWithSongs(playlist.id) });
 });
 
 /** 管理端曲库列表（含无音源项） */
@@ -503,7 +816,7 @@ router.get('/songs', adminRequired, async (req, res) => {
     params,
   );
   const rows = await query(
-    `SELECT s.*, ar.name AS artist_name, al.name AS album_name
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s
        LEFT JOIN artists ar ON ar.id = s.artist_id
        LEFT JOIN albums al ON al.id = s.album_id
@@ -567,7 +880,7 @@ router.patch('/songs/:id', adminRequired, async (req, res) => {
   params.push(song.id);
   await query(`UPDATE songs SET ${sets.join(', ')} WHERE id = ?`, params);
   const updated = await queryOne(
-    `SELECT s.*, ar.name AS artist_name, al.name AS album_name FROM songs s
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover FROM songs s
        LEFT JOIN artists ar ON ar.id = s.artist_id LEFT JOIN albums al ON al.id = s.album_id WHERE s.id = ?`,
     [song.id],
   );

@@ -93,7 +93,8 @@ const publicPath = (kind, filename) => `/${kind}/${filename}`;
 /** 曲库里是否已经有这首（标题 + 歌手归一化后匹配） */
 export async function findDuplicate(title, artist) {
   const rows = await query(
-    `SELECT s.id, s.title, s.artist_text, s.src, s.playable, s.source, al.name AS album
+    `SELECT s.id, s.title, s.artist_text, s.src, s.cover, s.lrc, s.duration,
+            s.playable, s.source, s.source_id, s.album_id, al.name AS album
        FROM songs s
        LEFT JOIN albums al ON al.id = s.album_id
       WHERE s.title_key = ?`,
@@ -418,25 +419,37 @@ async function findOrCreateArtist(name) {
   return row || null;
 }
 
-async function findOrCreateAlbum(name, artistId, cover = '') {
+async function findOrCreateAlbum(name, artistId, cover = '', year = '') {
   const clean = String(name || '').trim() || '未知专辑';
   const key = titleKey(clean);
+  const cleanYear = String(year || '').trim().slice(0, 8);
   const existing = await queryOne(
-    'SELECT id, cover FROM albums WHERE name_key = ? AND (artist_id <=> ?)',
+    'SELECT id, cover, year FROM albums WHERE name_key = ? AND (artist_id <=> ?)',
     [key, artistId],
   );
   if (existing) {
+    const sets = [];
+    const params = [];
     if (cover && !existing.cover) {
-      await query('UPDATE albums SET cover = ? WHERE id = ?', [cover, existing.id]);
-      return { id: existing.id, created: false };
+      sets.push('cover = ?');
+      params.push(cover);
+    }
+    if (cleanYear && !existing.year) {
+      sets.push('year = ?');
+      params.push(cleanYear);
+    }
+    if (sets.length) {
+      params.push(existing.id);
+      await query(`UPDATE albums SET ${sets.join(', ')} WHERE id = ?`, params);
     }
     return { id: existing.id, created: false };
   }
-  const res = await query('INSERT INTO albums (name, name_key, artist_id, cover) VALUES (?, ?, ?, ?)', [
+  const res = await query('INSERT INTO albums (name, name_key, artist_id, cover, year) VALUES (?, ?, ?, ?, ?)', [
     clean,
     key,
     artistId,
     cover,
+    cleanYear,
   ]);
   return { id: res.insertId, created: true };
 }
@@ -448,8 +461,10 @@ export async function persistSong({
   title,
   artist,
   album,
+  albumYear = '',
   durationSec,
   audioBuffer,
+  audioExt = 'mp3',
   coverBuffer,
   coverExt,
   lyricsText,
@@ -464,8 +479,10 @@ export async function persistSong({
   const fileBase = `${source}-${sourceId}`;
   const hasAudio = audioBuffer && audioBuffer.length > 0;
   const reuse = Boolean(filePath);
-  const musicFile = hasAudio && !reuse ? `${fileBase}.mp3` : '';
-  const coverFile = coverBuffer && !reuse ? `${fileBase}.${coverExt}` : '';
+  const safeAudioExt = String(audioExt || 'mp3').toLowerCase().replace(/[^a-z0-9]/g, '') || 'mp3';
+  const safeCoverExt = String(coverExt || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const musicFile = hasAudio && !reuse ? `${fileBase}.${safeAudioExt}` : '';
+  const coverFile = coverBuffer && !reuse ? `${fileBase}.${safeCoverExt}` : '';
   const lrcFile = lyricsText && !reuse ? `${fileBase}.lrc` : '';
 
   if (hasAudio && !reuse) await fs.writeFile(path.join(config.media.music, musicFile), audioBuffer);
@@ -477,7 +494,16 @@ export async function persistSong({
   const lrcPath = lrcPathOverride ?? (lrcFile ? publicPath('lyrics', lrcFile) : '');
 
   const artistRow = await findOrCreateArtist(artist);
-  const albumRow = await findOrCreateAlbum(album, artistRow?.id ?? null, coverPath);
+  // 当前模型没有独立的歌手头像上传字段；歌手尚无图片时，用本次专辑封面作为展示兜底。
+  // 用 COALESCE/NULLIF 在 SQL 侧判空，避免依赖 findOrCreateArtist 返回的快照，
+  // 也保证任何一次"带封面的导入"都能把空缺补上（不覆盖已上传的独立头像）。
+  if (artistRow && coverPath) {
+    await query(
+      "UPDATE artists SET cover = ? WHERE id = ? AND (cover IS NULL OR cover = '')",
+      [coverPath, artistRow.id],
+    );
+  }
+  const albumRow = await findOrCreateAlbum(album, artistRow?.id ?? null, coverPath, albumYear);
 
   await query(
     `INSERT INTO songs
@@ -588,119 +614,199 @@ export async function importCandidate({ server, id, target }, onProgress = () =>
   };
 }
 
-/** 本地上传：解析标签 → 文件名兜底 → 在线补全 → 自动归档 */
-export async function archiveUploadedFile({ buffer, filename = '', mimetype = '' }, onProgress = () => {}) {
+/** 不依赖在线服务的文件名兜底：推荐“歌手 - 歌名.mp3” */
+function guessLocalTitleArtist(filename = '') {
+  const base = String(filename)
+    .replace(/\.[a-z0-9]{2,5}$/i, '')
+    .replace(/^\s*\d{1,3}[\s._-]+/, '')
+    .trim();
+  const bracket = /^[\[【(（]([^\]】)）]+)[\]】)）]\s*(.+)$/.exec(base);
+  if (bracket) return { artist: bracket[1].trim(), title: bracket[2].trim(), from: 'filename-bracket' };
+  const dash = /^(.+?)\s*[-–—_]\s*(.+)$/.exec(base);
+  if (dash) return { artist: dash[1].trim(), title: dash[2].trim(), from: 'filename-artist-title' };
+  return { artist: '', title: base, from: 'filename-title' };
+}
+
+function decodeUtf8Text(buffer, label) {
+  if (!buffer?.length) return '';
+  const text = buffer.toString('utf8').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim();
+  if (text.includes('\uFFFD')) {
+    const error = new Error(`${label}不是有效的 UTF-8 编码，请转换编码后重新上传`);
+    error.status = 400;
+    throw error;
+  }
+  return text;
+}
+
+function parseUploadedLrc(buffer) {
+  const text = decodeUtf8Text(buffer, 'LRC 歌词');
+  if (!text) return { text: '', title: '', artist: '', album: '', timedLines: 0 };
+  const meta = (key) => {
+    const match = new RegExp(`^\\[${key}:([^\\]]*)\\]`, 'im').exec(text);
+    return match ? match[1].trim() : '';
+  };
+  const timedLines = text.split('\n').filter((line) => /\[\d{1,2}:\d{1,2}(?:[.:]\d{1,3})?\]/.test(line)).length;
+  if (!timedLines) {
+    const error = new Error('LRC 文件没有有效的时间标签，无法用于同步歌词');
+    error.status = 400;
+    throw error;
+  }
+  return { text: `${text}\n`, title: meta('ti'), artist: meta('ar'), album: meta('al'), timedLines };
+}
+
+function detectImageExt(input) {
+  if (!input?.length) return '';
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'jpg';
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return '';
+}
+
+function looksLikeMp3(buffer) {
+  if (!buffer || buffer.length < 4) return false;
+  if (buffer.toString('ascii', 0, 3) === 'ID3') return true;
+  const limit = Math.min(buffer.length - 1, 8192);
+  for (let i = 0; i < limit; i += 1) {
+    if (buffer[i] === 0xff && (buffer[i + 1] & 0xe0) === 0xe0) return true;
+  }
+  return false;
+}
+
+/**
+ * 本地完整归档：MP3 标签/内嵌封面 + 可选 LRC/独立封面 + 管理员字段。
+ * 全流程不调用网易云或其它在线音乐服务。
+ */
+export async function archiveUploadedFile(
+  {
+    buffer,
+    filename = '',
+    mimetype = '',
+    lyricsBuffer = null,
+    coverBuffer: uploadedCoverBuffer = null,
+    metadata = {},
+  },
+  onProgress = () => {},
+) {
   const step = (name, progress, message = '') => onProgress({ step: name, progress, message });
   const displayName = decodeUploadName(filename);
+  if (!buffer?.length) {
+    const error = new Error('MP3 文件为空');
+    error.status = 400;
+    throw error;
+  }
+  if (!/\.mp3$/i.test(displayName) || !looksLikeMp3(buffer)) {
+    const error = new Error('当前完整归档仅支持真实的 MP3 文件');
+    error.status = 400;
+    throw error;
+  }
 
-  step('解析音频标签', 15, '正在读取 ID3 / FLAC 标签');
-  let tags = { title: '', artist: '', album: '', durationSec: 0, cover: null, coverFormat: '' };
+  step('解析音频标签', 15, '正在读取 MP3 标签和内嵌封面');
+  let parsed;
   try {
-    const parsed = await parseBuffer(buffer, { mimeType: mimetype || undefined, path: displayName });
-    const common = parsed.common || {};
-    tags = {
-      title: (common.title || '').trim(),
-      artist: (common.artist || common.albumartist || '').trim(),
-      album: (common.album || '').trim(),
-      durationSec: parsed.format?.duration ? Math.round(parsed.format.duration) : 0,
-      cover: common.picture?.[0]?.data ?? null,
-      coverFormat: common.picture?.[0]?.format || '',
-    };
-  } catch (error) {
-    tags.parseError = error.message;
+    parsed = await parseBuffer(buffer, { mimeType: mimetype || 'audio/mpeg', path: displayName });
+  } catch (cause) {
+    const error = new Error(`MP3 无法解析：${cause.message}`);
+    error.status = 400;
+    throw error;
+  }
+  const durationSec = parsed.format?.duration ? Math.round(parsed.format.duration) : 0;
+  if (!durationSec) {
+    const error = new Error('没有从 MP3 中读取到有效时长，文件可能已损坏');
+    error.status = 400;
+    throw error;
   }
 
-  // 源站 mp3 常常没有 title/artist（实测只剩 track/disk），用文件名 + 在线检索补全
-  step('识别歌曲信息', 35, '标签不全，正在根据文件名与在线检索识别');
-  let guessed = null;
+  step('解析附属资源', 35, '正在校验 LRC 与封面');
+  const lrc = lyricsBuffer?.length ? parseUploadedLrc(lyricsBuffer) : { text: '', title: '', artist: '', album: '', timedLines: 0 };
+  const common = parsed.common || {};
+  const guessed = guessLocalTitleArtist(displayName);
+  const manual = {
+    title: String(metadata.title || '').trim(),
+    artist: String(metadata.artist || '').trim(),
+    album: String(metadata.album || '').trim(),
+    year: String(metadata.year || '').trim(),
+  };
+  const tags = {
+    title: manual.title || String(common.title || '').trim() || lrc.title || guessed.title,
+    artist: manual.artist || String(common.artist || common.albumartist || '').trim() || lrc.artist || guessed.artist,
+    album: manual.album || String(common.album || '').trim() || lrc.album || '未知专辑',
+    albumYear: manual.year || String(common.year || common.date || '').trim().slice(0, 8),
+    durationSec,
+  };
   if (!tags.title || !tags.artist) {
-    guessed = await guessTitleArtist(displayName);
-    if (!tags.title && guessed?.title) {
-      tags.title = guessed.title;
-      tags.titleFrom = `filename(${guessed.from})`;
-    }
-    if (!tags.artist && guessed?.artist) tags.artist = guessed.artist;
-    if (guessed?.matched) {
-      tags.album = tags.album || guessed.matched.album || '';
-      tags.artist = tags.artist || guessed.matched.artist || '';
-      tags.durationSec = tags.durationSec || guessed.matched.durationSec || 0;
+    const error = new Error('无法确定歌名或歌手，请在管理员自定义信息中补充后再上传');
+    error.status = 400;
+    throw error;
+  }
+
+  let coverBuffer = uploadedCoverBuffer;
+  let coverSource = coverBuffer?.length ? 'uploaded' : '';
+  if (!coverBuffer?.length) {
+    coverBuffer = common.picture?.[0]?.data ?? null;
+    if (coverBuffer?.length) coverSource = 'embedded';
+  }
+  if (coverBuffer?.length && !Buffer.isBuffer(coverBuffer)) coverBuffer = Buffer.from(coverBuffer);
+  let coverExt = '';
+  if (coverBuffer?.length) {
+    coverExt = detectImageExt(coverBuffer);
+    if (!coverExt) {
+      const error = new Error(`${coverSource === 'uploaded' ? '上传的封面' : 'MP3 内嵌封面'}不是支持的 JPG、PNG 或 WebP 图片`);
+      error.status = 400;
+      throw error;
     }
   }
 
-  // 在线匹配（拿专辑 / 封面 / 歌词）
-  step('匹配专辑与封面', 55, '正在补全专辑、封面与歌词');
-  let matched = guessed?.matched ?? null;
-  if (tags.title && (!matched || !matched.album)) {
-    const official = await searchNeteaseOfficial(`${tags.title} ${tags.artist}`.trim(), 10).catch(() => []);
-    matched =
-      official.find(
-        (s) =>
-          titleKey(s.name) === titleKey(tags.title) &&
-          (!tags.artist || artistMatches(s.artists, tags.artist)) &&
-          (!tags.durationSec || !s.durationSec || Math.abs(s.durationSec - tags.durationSec) <= 12),
-      ) ||
-      official.find((s) => titleKey(s.name) === titleKey(tags.title)) ||
-      matched;
-  }
-  if (matched) {
-    tags.album = matched.album || tags.album;
-    tags.artist = tags.artist || matched.artist;
-    tags.durationSec = tags.durationSec || matched.durationSec || 0;
-  }
-
+  step('检查重复曲目', 60, '正在判断新建或补齐现有曲目');
   const dup = await findDuplicate(tags.title, tags.artist);
-  if (dup) {
+  if (dup?.playable) {
     return {
       status: 'skipped',
-      message: `曲库中已有《${dup.title}》- ${dup.artist_text}${dup.album ? `《${dup.album}》` : ''}`,
+      message: `曲库中已有可播放的《${dup.title}》- ${dup.artist_text}${dup.album ? `《${dup.album}》` : ''}`,
       songId: dup.id,
-      tags,
+      tags: { ...tags, cover: Boolean(coverBuffer), coverSource, lyrics: Boolean(lrc.text), lyricsLines: lrc.timedLines },
     };
   }
 
-  // 没有内嵌封面就取在线封面；有匹配条目就顺带取歌词
-  let coverBuffer = tags.cover;
-  let coverExt = tags.coverFormat.includes('png') ? 'png' : 'jpg';
-  let lyricsText = '';
-  if (matched?.id) {
-    const detail = await neteaseDetail(matched.id);
-    if (!coverBuffer && detail?.coverUrl) {
-      const img = await fetchImage(detail.coverUrl);
-      if (img.ok) {
-        coverBuffer = img.buf;
-        coverExt = img.ct.includes('png') ? 'png' : 'jpg';
-      }
-    }
-    if (detail?.album && !tags.album) tags.album = detail.album;
-    if (detail?.durationSec && !tags.durationSec) tags.durationSec = detail.durationSec;
-    const lrc = await fetchLyrics('netease', matched.id);
-    if (lrc.ok) lyricsText = lrc.text;
-  }
-
-  step('写入曲库', 80, '正在归档到歌手 / 专辑');
-  const sourceId = sha1(buffer).slice(0, 16);
+  step('写入曲库', 80, dup ? '正在为已有曲目补齐本地媒体' : '正在归档到歌手 / 专辑');
+  const contentId = sha1(buffer).slice(0, 16);
   const song = await persistSong({
-    source: 'local',
-    sourceId,
+    // 对“仅元数据”歌曲原位补齐，保留其 source/source_id，避免用户喜欢记录失效。
+    source: dup?.source || 'local',
+    sourceId: dup?.source_id || contentId,
     title: tags.title,
-    artist: tags.artist || '未知歌手',
-    album: tags.album || '未知专辑',
+    artist: tags.artist,
+    album: tags.album,
+    albumYear: tags.albumYear,
     durationSec: tags.durationSec,
     audioBuffer: buffer,
+    audioExt: 'mp3',
     coverBuffer,
-    coverExt,
-    lyricsText,
+    coverExt: coverExt || 'jpg',
+    lyricsText: lrc.text,
+    coverPath: !coverBuffer?.length && dup?.cover ? dup.cover : undefined,
+    lrcPath: !lrc.text && dup?.lrc ? dup.lrc : undefined,
     externalUrl: '',
     playable: true,
   });
 
-  step('完成', 100, '归档成功');
+  step('完成', 100, dup ? '已有曲目已补齐' : '归档成功');
   return {
     status: 'success',
-    message: `已归档《${tags.title}》- ${tags.artist || '未知歌手'}${tags.album ? `《${tags.album}》` : ''}`,
+    upgraded: Boolean(dup),
+    message: dup
+      ? `已为《${tags.title}》- ${tags.artist}补齐本地音频${lrc.text ? '与歌词' : ''}`
+      : `已归档《${tags.title}》- ${tags.artist}${tags.album ? `《${tags.album}》` : ''}`,
     song,
-    matched: matched ? { id: matched.id, album: matched.album, source: 'netease' } : null,
-    tags: { ...tags, cover: Boolean(coverBuffer), lyrics: Boolean(lyricsText) },
+    matched: null,
+    tags: {
+      ...tags,
+      cover: Boolean(coverBuffer || dup?.cover),
+      coverSource: coverSource || (dup?.cover ? 'existing' : ''),
+      lyrics: Boolean(lrc.text || dup?.lrc),
+      lyricsLines: lrc.timedLines,
+      metadataSource: manual.title || manual.artist || manual.album ? '管理员 + MP3/LRC' : 'MP3/LRC',
+    },
   };
 }
 

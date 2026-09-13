@@ -42,7 +42,7 @@ export function ControlButtons() {
       <button type="button" className="ctrl" title="上一首" onClick={prev}>
         <PrevIcon size={21} />
       </button>
-      <button type="button" className="play-btn" title={isPlaying ? '暂停' : '播放'} onClick={toggle}>
+      <button type="button" className="play-btn" title={`${isPlaying ? '暂停' : '播放'}（空格）`} onClick={toggle}>
         {isPlaying ? <PauseIcon size={21} /> : <PlayIcon size={21} />}
       </button>
       <button type="button" className="ctrl" title="下一首" onClick={() => next()}>
@@ -106,7 +106,7 @@ export function VolumeControl({ withQueueCount = true }: { withQueueCount?: bool
   return (
     <div className="player-volume">
       {withQueueCount && queue.length ? <span className="queue-count">队列 {queue.length} 首</span> : null}
-      <button type="button" className="ctrl" title={muted ? '取消静音' : '静音'} onClick={toggleMute}>
+      <button type="button" className="ctrl" title={`${muted ? '取消静音' : '静音'}（M）`} onClick={toggleMute}>
         {muted || volume === 0 ? <VolumeMuteIcon size={19} /> : <VolumeIcon size={19} />}
       </button>
       <Slider

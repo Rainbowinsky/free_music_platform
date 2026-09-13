@@ -7,6 +7,7 @@ import { useUi } from '../store/ui';
 import { useRequireLogin } from '../hooks/useRequireLogin';
 import Cover from './Cover';
 import {
+  ChartIcon,
   ClockIcon,
   HeartFilledIcon,
   ListIcon,
@@ -30,6 +31,7 @@ const NAV_GROUPS = [
       { to: '/likes', label: '我喜欢', icon: <HeartFilledIcon size={17} />, end: false },
       { to: '/collection', label: '我的收藏', icon: <ListIcon size={17} />, end: false },
       { to: '/recent', label: '最近播放', icon: <ClockIcon size={17} />, end: false },
+      { to: '/stats', label: '听歌统计', icon: <ChartIcon size={17} />, end: false },
     ],
   },
 ];

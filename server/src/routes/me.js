@@ -21,6 +21,20 @@ const DESC_LIMIT = 200;
 
 const uid = (req) => Number(req.auth.sub);
 
+/**
+ * 把 DATE / DATETIME 值转成 YYYY-MM-DD（本地时区）。
+ * 连接池配了 timezone: 'local'，所以 mysql2 返回的是本地时间的 Date 对象；
+ * 但仍兼容 dateStrings 模式下返回字符串的情况，避免跨时区解析偏一天。
+ */
+function toDateKey(value) {
+  if (typeof value === 'string') return value.slice(0, 10);
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
+}
+
 const mapPlaylist = (row, songIds = []) => ({
   id: String(row.id),
   title: row.title,
@@ -145,6 +159,127 @@ router.post('/recent', async (req, res) => {
 router.delete('/recent', async (req, res) => {
   await query("DELETE FROM user_songs WHERE user_id = ? AND kind = 'recent'", [uid(req)]);
   res.json({ ok: true });
+});
+
+/* ─────────────── 播放埋点与听歌统计 ─────────────── */
+
+/**
+ * 记录一次播放。
+ *
+ * 由前端在「累计播放超过阈值」时调用，而不是一按播放就上报 ——
+ * 否则快速切歌会把统计刷得虚高，排行榜也就不准了。
+ */
+router.post('/plays', async (req, res) => {
+  const userId = uid(req);
+  const songId = String(req.body?.songId || '').trim().slice(0, 64);
+  if (!songId) return res.status(400).json({ error: '缺少 songId' });
+
+  const title = String(req.body?.title || '').trim().slice(0, 255);
+  const artist = String(req.body?.artist || '').trim().slice(0, 255);
+  // 时长只用于累计，限制在 0~10 小时之间，避免脏数据把总时长撑爆
+  const duration = Math.max(0, Math.min(36000, Math.round(Number(req.body?.duration) || 0)));
+
+  await query('INSERT INTO play_events (user_id, song_id, title, artist, duration) VALUES (?, ?, ?, ?, ?)', [
+    userId,
+    songId,
+    title,
+    artist,
+    duration,
+  ]);
+  return res.json({ ok: true });
+});
+
+/** 听歌统计聚合。days 控制"最近 N 天趋势"的窗口 */
+router.get('/stats', async (req, res) => {
+  const userId = uid(req);
+  const days = Math.min(90, Math.max(7, Math.round(Number(req.query.days) || 14)));
+
+  const [overview] = await query(
+    `SELECT COUNT(*) AS totalPlays,
+            COALESCE(SUM(duration), 0) AS totalSeconds,
+            COUNT(DISTINCT song_id) AS distinctSongs,
+            COUNT(DISTINCT NULLIF(artist, '')) AS distinctArtists,
+            MIN(played_at) AS firstPlayedAt
+       FROM play_events
+      WHERE user_id = ?`,
+    [userId],
+  );
+
+  const topArtists = await query(
+    `SELECT artist, COUNT(*) AS plays, COALESCE(SUM(duration), 0) AS seconds
+       FROM play_events
+      WHERE user_id = ? AND artist <> ''
+      GROUP BY artist
+      ORDER BY plays DESC, artist ASC
+      LIMIT 8`,
+    [userId],
+  );
+
+  const topSongs = await query(
+    `SELECT song_id, MAX(title) AS title, MAX(artist) AS artist, COUNT(*) AS plays
+       FROM play_events
+      WHERE user_id = ?
+      GROUP BY song_id
+      ORDER BY plays DESC, song_id ASC
+      LIMIT 10`,
+    [userId],
+  );
+
+  const hourRows = await query(
+    `SELECT HOUR(played_at) AS h, COUNT(*) AS plays
+       FROM play_events
+      WHERE user_id = ?
+      GROUP BY h`,
+    [userId],
+  );
+
+  // days 已钳制为 7~90 的整数，直接内联，避免 INTERVAL ? 的兼容性差异
+  const dayRows = await query(
+    `SELECT DATE(played_at) AS d, COUNT(*) AS plays
+       FROM play_events
+      WHERE user_id = ? AND played_at >= DATE_SUB(CURDATE(), INTERVAL ${days - 1} DAY)
+      GROUP BY d
+      ORDER BY d`,
+    [userId],
+  );
+
+  // 24 小时分布：补齐没有播放的小时，前端画图不用再处理空洞
+  const hourMap = new Map(hourRows.map((row) => [Number(row.h), Number(row.plays)]));
+  const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, plays: hourMap.get(h) || 0 }));
+
+  // 最近 N 天：同样补齐没有播放的日期
+  const dayMap = new Map(dayRows.map((row) => [toDateKey(row.d), Number(row.plays)]));
+  const byDay = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const key = toDateKey(date);
+    byDay.push({ date: key, plays: dayMap.get(key) || 0 });
+  }
+
+  return res.json({
+    overview: {
+      totalPlays: Number(overview?.totalPlays || 0),
+      totalSeconds: Number(overview?.totalSeconds || 0),
+      distinctSongs: Number(overview?.distinctSongs || 0),
+      distinctArtists: Number(overview?.distinctArtists || 0),
+      firstPlayedAt: overview?.firstPlayedAt ? new Date(overview.firstPlayedAt).getTime() : null,
+    },
+    topArtists: topArtists.map((row) => ({
+      artist: row.artist,
+      plays: Number(row.plays),
+      seconds: Number(row.seconds),
+    })),
+    topSongs: topSongs.map((row) => ({
+      songId: row.song_id,
+      title: row.title,
+      artist: row.artist,
+      plays: Number(row.plays),
+    })),
+    byHour,
+    byDay,
+    days,
+  });
 });
 
 /* ─────────────── 自建歌单 ─────────────── */

@@ -145,6 +145,12 @@ body.lyrics-open .app-shell {
   color: #ff5a5a;
 }
 
+/* 「翻译」开关打开时的状态 */
+.lyrics-action.is-on {
+  color: #45d68f;
+  background: rgba(69, 214, 143, 0.16);
+}
+
 .lyrics-main {
   flex: 1;
   min-height: 0;
@@ -284,6 +290,31 @@ body.lyrics-open .app-shell {
   font-weight: 700;
   background: none;
   text-shadow: 0 0 24px rgba(69, 214, 143, 0.35);
+}
+
+/* ---------- 双语歌词 ---------- */
+
+.lyrics-view .lyric-text {
+  display: block;
+}
+
+/* 译文比原文小一号、更淡，视觉上从属于原文，不抢视线 */
+.lyrics-view .lyric-trans {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.34);
+}
+
+.lyrics-view .lyric-line:hover .lyric-trans {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.lyrics-view .lyric-line.is-active .lyric-trans {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .lyrics-empty {

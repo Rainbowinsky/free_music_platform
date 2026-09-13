@@ -562,3 +562,338 @@
     display: none;
   }
 }
+
+/* ---------- 听歌统计 ---------- */
+
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.stats-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+
+.stats-card-label {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.stats-card-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.stats-insight {
+  margin-bottom: 22px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--green-50);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.stats-insight strong {
+  color: var(--green-700);
+}
+
+.stats-loading,
+.stats-error {
+  padding: 30px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-4);
+}
+
+.stats-error {
+  color: var(--red);
+}
+
+/* ── 横向条形（歌手） ── */
+
+.stats-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stats-bar-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 64px;
+  align-items: center;
+  gap: 14px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  transition: background 0.16s ease;
+}
+
+.stats-bar-row:hover {
+  background: var(--bg-hover);
+}
+
+.stats-bar-name {
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-bar-row:hover .stats-bar-name {
+  color: var(--green);
+}
+
+.stats-bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.stats-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--green);
+}
+
+.stats-bar-value {
+  font-size: 12px;
+  color: var(--text-4);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 最常听的歌曲 ── */
+
+.stats-songs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stats-song {
+  display: grid;
+  grid-template-columns: 26px 40px minmax(0, 1fr) 120px 56px 28px;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.16s ease;
+}
+
+.stats-song:hover {
+  background: var(--bg-hover);
+}
+
+.stats-song-no {
+  font-size: 13px;
+  color: var(--text-5);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-song-no.is-top {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.stats-song-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stats-song-title {
+  font-size: 14px;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-song-artist {
+  font-size: 12px;
+  color: var(--text-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stats-song-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-2);
+  overflow: hidden;
+}
+
+.stats-song-plays {
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-song-play {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-4);
+  opacity: 0;
+  transition: opacity 0.16s ease, color 0.16s ease, background 0.16s ease;
+}
+
+.stats-song:hover .stats-song-play {
+  opacity: 1;
+}
+
+.stats-song-play:hover {
+  color: var(--green);
+  background: var(--green-50);
+}
+
+/* ── 24 小时分布 ── */
+
+.stats-hours {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 132px;
+  padding: 0 4px;
+}
+
+.stats-hour {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+}
+
+.stats-hour-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: var(--green);
+  transition: background 0.16s ease;
+}
+
+.stats-hour-bar.is-empty {
+  background: var(--line-2);
+}
+
+.stats-hour:hover .stats-hour-bar {
+  background: var(--green-700);
+}
+
+.stats-hour-label {
+  font-size: 11px;
+  color: var(--text-5);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 播放趋势 ── */
+
+.stats-ranges {
+  display: flex;
+  gap: 6px;
+}
+
+.stats-range {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-3);
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.stats-range:hover {
+  background: var(--bg-hover);
+}
+
+.stats-range.is-active {
+  color: var(--green-700);
+  background: var(--green-50);
+  font-weight: 600;
+}
+
+.stats-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 110px;
+  padding: 0 2px;
+}
+
+.stats-trend-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  min-width: 2px;
+}
+
+.stats-trend-bar {
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  background: var(--green);
+  transition: background 0.16s ease;
+}
+
+.stats-trend-bar.is-empty {
+  background: var(--line-2);
+}
+
+.stats-trend-col:hover .stats-trend-bar {
+  background: var(--green-700);
+}
+
+.stats-trend-legend {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-5);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-note {
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-5);
+  line-height: 1.7;
+}
+
+@media (max-width: 900px) {
+  .stats-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stats-song {
+    grid-template-columns: 26px 40px minmax(0, 1fr) 56px 28px;
+  }
+
+  .stats-song-bar {
+    display: none;
+  }
+
+  .stats-bar-row {
+    grid-template-columns: 100px 1fr 56px;
+  }
+}

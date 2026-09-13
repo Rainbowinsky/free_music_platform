@@ -6,7 +6,7 @@ import { useUi } from '../store/ui';
 import { useRequireLogin } from '../hooks/useRequireLogin';
 import { formatTime } from '../utils/format';
 import Cover from './Cover';
-import { CloseIcon, HeartFilledIcon, HeartIcon, PauseIcon, PlayIcon, PlusIcon } from './Icons';
+import { CloseIcon, HeartFilledIcon, HeartIcon, PauseIcon, PlayIcon, PlayNextIcon, PlusIcon } from './Icons';
 
 interface SongListProps {
   songs: Song[];
@@ -35,6 +35,7 @@ export default function SongList({
   const isPlaying = usePlayer((s) => s.isPlaying);
   const playQueue = usePlayer((s) => s.playQueue);
   const toggle = usePlayer((s) => s.toggle);
+  const playNext = usePlayer((s) => s.playNext);
   const liked = useLibrary((s) => s.liked);
   const toggleLike = useLibrary((s) => s.toggleLike);
   const openAdd = useUi((s) => s.openAddToPlaylist);
@@ -134,6 +135,23 @@ export default function SongList({
             {showAlbum ? <span className="col-album">{song.album}</span> : null}
 
             <span className="col-duration">
+              <button
+                type="button"
+                className="song-next"
+                title="下一首播放"
+                aria-label="下一首播放"
+                onClick={() => {
+                  // 没有音源的曲目插进队列也放不出来，直接给出提示
+                  if (song.playable === false || !song.src) {
+                    toast(`《${song.name}》暂无可用音源`);
+                    return;
+                  }
+                  if (playNext(song)) toast(`《${song.name}》已设为下一首播放`);
+                  else toast(`《${song.name}》正在播放中`);
+                }}
+              >
+                <PlayNextIcon size={16} />
+              </button>
               <button
                 type="button"
                 className="song-add"

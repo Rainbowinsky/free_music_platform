@@ -84,6 +84,12 @@ export const useSongs = (): Song[] => useCatalog((s) => s.songs);
 export const useSongMap = (): Record<string, Song> => useCatalog((s) => s.map);
 /** 当前数据源，用于界面上提示「本地静态曲库」 */
 export const useCatalogSource = () => useCatalog((s) => s.source);
+/**
+ * 曲库是否仍在加载。
+ * 初始 state 里 songs 是内置静态数据，直接渲染会先显示静态曲库再被接口数据替换，
+ * 造成一次内容闪动；列表页据此改用骨架屏。
+ */
+export const useCatalogLoading = (): boolean => useCatalog((s) => s.status === 'loading');
 
 export const getCatalogSongs = (): Song[] => useCatalog.getState().songs;
 export const getCatalogMap = (): Record<string, Song> => useCatalog.getState().map;

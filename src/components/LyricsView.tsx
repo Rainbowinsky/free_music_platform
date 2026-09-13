@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Cover from './Cover';
 import PlayerControls, { VolumeControl } from './PlayerControls';
-import { ChevronLeftIcon, HeartFilledIcon, HeartIcon, PlusIcon } from './Icons';
+import { ChevronLeftIcon, HeartFilledIcon, HeartIcon, PlusIcon, TranslateIcon } from './Icons';
 import { usePlayer } from '../store/player';
 import { useLibrary } from '../store/library';
 import { useUi } from '../store/ui';
@@ -21,9 +21,11 @@ export default function LyricsView() {
   const liked = useLibrary((s) => s.liked);
   const toggleLike = useLibrary((s) => s.toggleLike);
   const openAdd = useUi((s) => s.openAddToPlaylist);
+  const showTranslation = useUi((s) => s.showTranslation);
+  const toggleTranslation = useUi((s) => s.toggleTranslation);
   const guard = useRequireLogin();
 
-  const { lines } = useLyrics(current?.lrc);
+  const { lines, hasTranslation } = useLyrics(current?.lrc);
   const scrollRef = useRef<HTMLDivElement>(null);
   const manualUntilRef = useRef(0);
   const [manualScrolling, setManualScrolling] = useState(false);
@@ -102,6 +104,18 @@ export default function LyricsView() {
             <span className="lyrics-top-artist">{current?.artist ?? ''}</span>
           </div>
           <div className="lyrics-top-actions">
+            {/* 只有这首歌真的带译文时才显示开关，避免放一个点了没反应的按钮 */}
+            {hasTranslation ? (
+              <button
+                type="button"
+                className={`lyrics-action ${showTranslation ? 'is-on' : ''}`}
+                title={showTranslation ? '隐藏翻译' : '显示翻译'}
+                aria-pressed={showTranslation}
+                onClick={toggleTranslation}
+              >
+                <TranslateIcon size={19} />
+              </button>
+            ) : null}
             <button
               type="button"
               className={`lyrics-action ${isLiked ? 'is-liked' : ''}`}
@@ -163,11 +177,16 @@ export default function LyricsView() {
                 <p
                   key={`${line.time}-${index}`}
                   data-line={index}
-                  className={`lyric-line ${index === activeIndex ? 'is-active' : ''}`}
+                  className={`lyric-line ${index === activeIndex ? 'is-active' : ''} ${
+                    line.translation ? 'has-translation' : ''
+                  }`}
                   onClick={() => seek(line.time)}
                   title="点击跳转到这一句"
                 >
-                  {line.text}
+                  <span className="lyric-text">{line.text}</span>
+                  {line.translation && showTranslation ? (
+                    <span className="lyric-trans">{line.translation}</span>
+                  ) : null}
                 </p>
               ))
             )}

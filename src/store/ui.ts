@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { store } from '../lib/db';
 
 export interface Toast {
   id: number;
@@ -19,11 +20,14 @@ interface UiState {
   playlistModal: PlaylistModalState;
   openPlaylistModal: (mode: 'create' | 'edit', playlistId?: string) => void;
   closePlaylistModal: () => void;
+  /** 歌词是否显示中文译文（设备级偏好，落 localStorage） */
+  showTranslation: boolean;
+  toggleTranslation: () => void;
 }
 
 let toastId = 0;
 
-export const useUi = create<UiState>((set) => ({
+export const useUi = create<UiState>((set, get) => ({
   toasts: [],
   toast: (text) => {
     const id = ++toastId;
@@ -42,4 +46,11 @@ export const useUi = create<UiState>((set) => ({
   openPlaylistModal: (mode, playlistId) =>
     set({ playlistModal: mode === 'edit' && playlistId ? { mode, playlistId } : { mode: 'create' } }),
   closePlaylistModal: () => set({ playlistModal: null }),
+
+  showTranslation: store.getShowTranslation(),
+  toggleTranslation: () => {
+    const next = !get().showTranslation;
+    store.setShowTranslation(next);
+    set({ showTranslation: next });
+  },
 }));

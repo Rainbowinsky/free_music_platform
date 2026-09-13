@@ -1,6 +1,6 @@
 import PlaylistCard from '../components/PlaylistCard';
 import Empty from '../components/Empty';
-import { PLAYLISTS } from '../data/playlists';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
 import { useAuth } from '../store/auth';
 import { useLibrary } from '../store/library';
 
@@ -9,7 +9,8 @@ export default function Collection() {
   const openModal = useAuth((s) => s.openModal);
   const collected = useLibrary((s) => s.collected);
   const toggleCollect = useLibrary((s) => s.toggleCollect);
-  const playlists = PLAYLISTS.filter((playlist) => collected.includes(playlist.id));
+  const featured = useFeaturedPlaylistItems();
+  const playlists = featured.filter((playlist) => collected.includes(playlist.id));
 
   if (!user) {
     return (

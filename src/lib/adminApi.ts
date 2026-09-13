@@ -85,6 +85,40 @@ export interface AdminSong {
   createdAt: string;
 }
 
+export interface AdminArtist {
+  id: number;
+  name: string;
+  cover: string;
+  songCount: number;
+  albumCount: number;
+  createdAt?: string;
+}
+
+export interface AdminAlbum {
+  id: number;
+  name: string;
+  artistId: number | null;
+  artistName: string;
+  cover: string;
+  year: string;
+  songCount: number;
+  createdAt?: string;
+}
+
+export interface AdminFeaturedPlaylist {
+  id: string;
+  title: string;
+  description: string;
+  cover: string;
+  tags: string[];
+  creator: string;
+  playCount: number;
+  sortOrder: number;
+  visible: boolean;
+  songIds: string[];
+  createdAt?: string;
+}
+
 export interface ImportTask {
   id: string;
   action: string;
@@ -215,17 +249,73 @@ export const adminApi = {
 
   tasks: () => request<{ items: ImportTask[] }>('/api/admin/tasks'),
 
-  upload: (file: File) => {
+  upload: (payload: {
+    audio: File;
+    lyrics?: File | null;
+    cover?: File | null;
+    title?: string;
+    artist?: string;
+    album?: string;
+    year?: string;
+  }) => {
     const form = new FormData();
-    form.append('file', file);
+    form.append('audio', payload.audio);
+    if (payload.lyrics) form.append('lyrics', payload.lyrics);
+    if (payload.cover) form.append('cover', payload.cover);
+    for (const key of ['title', 'artist', 'album', 'year'] as const) {
+      const value = payload[key]?.trim();
+      if (value) form.append(key, value);
+    }
     return request<{
       status: string;
       message: string;
+      upgraded?: boolean;
       song?: AdminSong;
       matched?: { id: string; album: string; source: string } | null;
       tags?: Record<string, unknown>;
     }>('/api/admin/upload', { form });
   },
+
+  artists: (keyword = '') => request<{ items: AdminArtist[] }>(`/api/admin/artists${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`),
+
+  updateArtist: (id: number, payload: { name: string }) =>
+    request<{ artist: AdminArtist }>(`/api/admin/artists/${id}`, { method: 'PATCH', body: payload }),
+
+  uploadArtistCover: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('cover', file);
+    return request<{ cover: string }>(`/api/admin/artists/${id}/cover`, { form });
+  },
+
+  albums: (keyword = '') => request<{ items: AdminAlbum[] }>(`/api/admin/albums${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`),
+
+  updateAlbum: (id: number, payload: { name: string; year?: string }) =>
+    request<{ album: AdminAlbum }>(`/api/admin/albums/${id}`, { method: 'PATCH', body: payload }),
+
+  uploadAlbumCover: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('cover', file);
+    return request<{ cover: string }>(`/api/admin/albums/${id}/cover`, { form });
+  },
+
+  featuredPlaylists: () => request<{ items: AdminFeaturedPlaylist[] }>('/api/admin/featured-playlists'),
+
+  createFeaturedPlaylist: (payload: Partial<Pick<AdminFeaturedPlaylist, 'title' | 'description' | 'creator' | 'tags' | 'playCount' | 'sortOrder' | 'visible'>>) =>
+    request<{ playlist: AdminFeaturedPlaylist }>('/api/admin/featured-playlists', { body: payload }),
+
+  updateFeaturedPlaylist: (id: string, payload: Partial<Pick<AdminFeaturedPlaylist, 'title' | 'description' | 'creator' | 'tags' | 'playCount' | 'sortOrder' | 'visible'>>) =>
+    request<{ playlist: AdminFeaturedPlaylist }>(`/api/admin/featured-playlists/${id}`, { method: 'PATCH', body: payload }),
+
+  deleteFeaturedPlaylist: (id: string) => request<{ ok: boolean }>(`/api/admin/featured-playlists/${id}`, { method: 'DELETE' }),
+
+  uploadFeaturedCover: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('cover', file);
+    return request<{ cover: string }>(`/api/admin/featured-playlists/${id}/cover`, { form });
+  },
+
+  replaceFeaturedPlaylistSongs: (id: string, songIds: string[]) =>
+    request<{ playlist: AdminFeaturedPlaylist }>(`/api/admin/featured-playlists/${id}/songs`, { method: 'PUT', body: { songIds } }),
 
   songs: (params: { keyword?: string; playable?: string; page?: number; size?: number } = {}) => {
     const qs = new URLSearchParams();

@@ -14,6 +14,17 @@ export function formatCount(count: number): string {
   return String(count);
 }
 
+/** 秒 -> 人类可读的总时长，例如「3 小时 12 分」「12 分钟」 */
+export function formatTotalDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0 分钟';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h} 小时 ${m} 分` : `${h} 小时`;
+  if (m > 0) return `${m} 分钟`;
+  return `${total} 秒`;
+}
+
 /** 封面缺失时用歌曲名首字生成占位文案 */
 export function coverInitial(name: string): string {
   return (name || '?').trim().charAt(0);

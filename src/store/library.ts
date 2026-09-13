@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { UserPlaylist } from '../types';
+import type { Song, UserPlaylist } from '../types';
 import { meApi, MeError, store } from '../lib/db';
 
 const RECENT_LIMIT = 100;
@@ -26,6 +26,11 @@ interface LibraryState {
   toggleCollect: (playlistId: string) => Promise<void>;
   addRecent: (songId: string) => Promise<void>;
   clearRecent: () => Promise<void>;
+  /**
+   * 上报一次播放（听歌统计用）。播放器在累计听够阈值后调用一次。
+   * 未登录时静默跳过——统计是账号级数据，游客没有归属处。
+   */
+  recordPlay: (song: Song) => void;
   createPlaylist: (title: string, desc?: string) => Promise<UserPlaylist | null>;
   updatePlaylist: (playlistId: string, patch: Partial<Pick<UserPlaylist, 'title' | 'desc' | 'cover'>>) => Promise<void>;
   deletePlaylist: (playlistId: string) => Promise<void>;
@@ -168,6 +173,22 @@ export const useLibrary = create<LibraryState>((set, get) => {
         // 最近播放失败不打扰用户（播放本身不该被同步问题打断），只记录提示
         set({ error: describe(error) });
       }
+    },
+
+    recordPlay: (song) => {
+      const token = guard();
+      // 统计是账号级数据，未登录不上报
+      if (!token) return;
+      void meApi
+        .recordPlay(token, {
+          songId: song.id,
+          title: song.name,
+          artist: song.artist,
+          duration: Math.round(song.duration || 0),
+        })
+        .catch(() => {
+          // 统计上报失败不该影响播放，静默忽略
+        });
     },
 
     clearRecent: async () => {

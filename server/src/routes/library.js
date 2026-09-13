@@ -13,13 +13,69 @@ const mapSong = (row) => ({
   album: row.album_name || '',
   duration: row.duration,
   src: row.src,
-  cover: row.cover,
+  cover: row.cover || row.album_cover || '',
   lrc: row.lrc,
   source: row.source,
+  // 前端 Song.id、用户收藏和推荐歌单关联均使用来源侧 ID，不使用数据库自增主键。
+  sourceId: row.source_id,
   playable: Boolean(row.playable),
   externalUrl: row.external_url,
   fileSize: row.file_size,
   createdAt: row.created_at,
+});
+
+const mapFeaturedPlaylist = (row, songIds = []) => {
+  let tags = [];
+  try {
+    const parsed = typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags;
+    tags = Array.isArray(parsed) ? parsed.filter((tag) => typeof tag === 'string').slice(0, 8) : [];
+  } catch {
+    tags = [];
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    cover: row.cover,
+    desc: row.description,
+    tags,
+    playCount: Number(row.play_count || 0),
+    creator: row.creator,
+    songIds,
+  };
+};
+
+/** 首页推荐歌单（为空时前端回退内置展示数据） */
+router.get('/playlists', async (_req, res) => {
+  const rows = await query(
+    `SELECT * FROM featured_playlists
+      WHERE visible = 1
+      ORDER BY sort_order ASC, created_at DESC`,
+  );
+  if (!rows.length) return res.json({ items: [] });
+  const ids = rows.map((row) => row.id);
+  const marks = ids.map(() => '?').join(', ');
+  const links = await query(
+    `SELECT playlist_id, song_id FROM featured_playlist_songs
+      WHERE playlist_id IN (${marks})
+      ORDER BY playlist_id, position ASC, created_at ASC`,
+    ids,
+  );
+  const songsByPlaylist = new Map(ids.map((id) => [id, []]));
+  for (const link of links) songsByPlaylist.get(link.playlist_id)?.push(link.song_id);
+  return res.json({ items: rows.map((row) => mapFeaturedPlaylist(row, songsByPlaylist.get(row.id) || [])) });
+});
+
+/** 单个推荐歌单详情（供歌单详情页读取） */
+router.get('/playlists/:id', async (req, res) => {
+  const row = await queryOne('SELECT * FROM featured_playlists WHERE id = ? AND visible = 1', [req.params.id]);
+  if (!row) return res.status(404).json({ error: '歌单不存在' });
+  const links = await query(
+    `SELECT song_id FROM featured_playlist_songs
+      WHERE playlist_id = ?
+      ORDER BY position ASC, created_at ASC`,
+    [row.id],
+  );
+  return res.json({ playlist: mapFeaturedPlaylist(row, links.map((link) => link.song_id)) });
 });
 
 /** 曲库列表（公开读） */
@@ -43,7 +99,7 @@ router.get('/songs', async (req, res) => {
     params,
   );
   const rows = await query(
-    `SELECT s.*, ar.name AS artist_name, al.name AS album_name
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s
        LEFT JOIN artists ar ON ar.id = s.artist_id
        LEFT JOIN albums al ON al.id = s.album_id
@@ -59,7 +115,11 @@ router.get('/songs', async (req, res) => {
 /** 歌手列表（含歌曲数） */
 router.get('/artists', async (_req, res) => {
   const rows = await query(
-    `SELECT ar.id, ar.name, ar.cover, COUNT(s.id) AS song_count,
+    // artists.cover 是可选的独立头像（仅少数歌手有）；为空时回退到该歌手任一歌曲的封面，
+    // 否则歌手列表页会大面积退化成渐变占位，而详情页却有图（详情页取 songs[0].cover）。
+    `SELECT ar.id, ar.name,
+            COALESCE(NULLIF(ar.cover, ''), MAX(s.cover)) AS cover,
+            COUNT(s.id) AS song_count,
             SUM(CASE WHEN s.playable = 1 THEN 1 ELSE 0 END) AS playable_count
        FROM artists ar
        LEFT JOIN songs s ON s.artist_id = ar.id
@@ -83,7 +143,7 @@ router.get('/artists/:id', async (req, res) => {
   if (!artist) return res.status(404).json({ error: '歌手不存在' });
   const albums = await query('SELECT id, name, cover, year FROM albums WHERE artist_id = ? ORDER BY id', [artist.id]);
   const songs = await query(
-    `SELECT s.*, ar.name AS artist_name, al.name AS album_name
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s
        LEFT JOIN artists ar ON ar.id = s.artist_id
        LEFT JOIN albums al ON al.id = s.album_id
@@ -151,7 +211,7 @@ router.patch('/songs/:id', adminRequired, async (req, res) => {
   params.push(song.id);
   await query(`UPDATE songs SET ${sets.join(', ')} WHERE id = ?`, params);
   const updated = await queryOne(
-    `SELECT s.*, ar.name AS artist_name, al.name AS album_name
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s LEFT JOIN artists ar ON ar.id = s.artist_id LEFT JOIN albums al ON al.id = s.album_id
       WHERE s.id = ?`,
     [song.id],

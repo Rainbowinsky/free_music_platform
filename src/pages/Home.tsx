@@ -3,23 +3,24 @@ import Banner from '../components/Banner';
 import PlaylistCard from '../components/PlaylistCard';
 import SongList from '../components/SongList';
 import Cover from '../components/Cover';
-import { PLAYLISTS, playlistSongs } from '../data/playlists';
-import { useSongs, useSongMap } from '../store/catalog';
+import { playlistSongs } from '../data/playlists';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
+import { useCatalogLoading, useSongs, useSongMap } from '../store/catalog';
+import { SongListSkeleton } from '../components/Skeleton';
 import { usePlayer } from '../store/player';
 import { PlayIcon } from '../components/Icons';
 import { formatCount } from '../utils/format';
-
-const RANK_IDS = ['hot', 'rock', 'healing'];
 
 export default function Home() {
   const playQueue = usePlayer((s) => s.playQueue);
   const catalog = useSongs();
   const songMap = useSongMap();
+  const loading = useCatalogLoading();
+  const playlists = useFeaturedPlaylistItems();
   // 接口按入库时间倒序返回，所以前 10 首就是"最新入库"（含管理台新下载的歌）
   const latest = catalog.slice(0, 10);
-  const ranks = RANK_IDS.map((id) => PLAYLISTS.find((p) => p.id === id)).filter(
-    (p): p is NonNullable<typeof p> => Boolean(p),
-  );
+  // 推荐歌单由管理台维护，排行榜区域直接取排序靠前的三个，避免依赖旧的静态歌单 ID。
+  const ranks = playlists.slice(0, 3);
 
   return (
     <div className="page home">
@@ -33,7 +34,7 @@ export default function Home() {
           </Link>
         </header>
         <div className="playlist-grid">
-          {PLAYLISTS.map((playlist) => (
+          {playlists.map((playlist) => (
             <PlaylistCard key={playlist.id} playlist={playlist} />
           ))}
         </div>
@@ -42,12 +43,14 @@ export default function Home() {
       <section className="section">
         <header className="section-head">
           <h3 className="section-title">最新音乐</h3>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => playQueue(latest, 0)}>
-            <PlayIcon size={14} />
-            播放全部
-          </button>
+          {!loading ? (
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => playQueue(latest, 0)}>
+              <PlayIcon size={14} />
+              播放全部
+            </button>
+          ) : null}
         </header>
-        <SongList songs={latest} />
+        {loading ? <SongListSkeleton rows={10} /> : <SongList songs={latest} />}
       </section>
 
       <section className="section">

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Cover from '../components/Cover';
 import SongList from '../components/SongList';
@@ -11,7 +12,19 @@ export default function ArtistDetail() {
   const artistName = decodeURIComponent(name);
   const playQueue = usePlayer((s) => s.playQueue);
   const catalog = useSongs();
+  const [artistCover, setArtistCover] = useState('');
   const songs = catalog.filter((song) => song.artist === artistName || song.artist.includes(artistName));
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/library/artists')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { items?: { name: string; cover: string }[] } | null) => {
+        const artist = data?.items?.find((item) => item.name === artistName);
+        if (!cancelled) setArtistCover(artist?.cover || '');
+      })
+      .catch(() => { if (!cancelled) setArtistCover(''); });
+    return () => { cancelled = true; };
+  }, [artistName]);
 
   if (!songs.length) {
     return (
@@ -32,7 +45,7 @@ export default function ArtistDetail() {
   return (
     <div className="page">
       <header className="artist-head">
-        <Cover src={songs[0].cover} name={artistName} size={150} rounded className="artist-head-cover" />
+        <Cover src={artistCover || songs[0].cover} name={artistName} size={150} rounded className="artist-head-cover" />
         <div className="artist-head-info">
           <span className="detail-tag">歌手</span>
           <h2 className="detail-title">{artistName}</h2>

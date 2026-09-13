@@ -1,4 +1,4 @@
-import type { User, UserPlaylist } from '../types';
+import type { PlayMode, Song, User, UserPlaylist } from '../types';
 
 /**
  * 数据层
@@ -16,6 +16,7 @@ import type { User, UserPlaylist } from '../types';
  * 仍然留在浏览器本地的数据（这些属于设备偏好，不需要跨设备同步）：
  *   - 搜索历史、音量
  *   - 游客（未登录）的最近播放
+ *   - 播放器现场（队列 / 当前曲目 / 播放模式 / 播放进度），见下方 PLAYER_KEY
  *   - 旧版 qqmusic.db.v1 遗留数据：只在首次登录时被读取一次，用于迁移到后端，
  *     迁移完成后不再写入（见 store/migrate.ts）
  */
@@ -23,6 +24,28 @@ import type { User, UserPlaylist } from '../types';
 /** 旧的本地账号库键名，仅用于数据迁移与提示 */
 const LEGACY_DB_KEY = 'qqmusic.db.v1';
 const SESSION_KEY = 'qqmusic.session.v1';
+/**
+ * 播放器现场分两个键存：
+ *   - PLAYER_KEY 存队列结构（大对象），只在队列/索引/模式变化时写；
+ *   - PLAYER_POS_KEY 只存一个进度数字（小对象），每几秒写一次。
+ * 拆开是为了避免每次 timeupdate 都把整个队列 JSON.stringify 一遍。
+ */
+const PLAYER_KEY = 'qqmusic.player.v1';
+const PLAYER_POS_KEY = 'qqmusic.player.pos.v1';
+
+/** 队列最多持久化这么多首，避免极端情况下撑爆 localStorage */
+const MAX_PERSISTED_QUEUE = 500;
+
+export interface PersistedPlayer {
+  queue: Song[];
+  index: number;
+  mode: PlayMode;
+}
+
+export interface PersistedPosition {
+  songId: string;
+  progress: number;
+}
 
 export interface StoredUser {
   username: string;
@@ -300,7 +323,36 @@ export const meApi = {
       { method: 'DELETE' },
     );
   },
+
+  /** 上报一次播放（前端累计听够阈值后才调用，避免快速切歌把统计刷高） */
+  async recordPlay(
+    token: string,
+    payload: { songId: string; title: string; artist: string; duration: number },
+  ): Promise<void> {
+    await callMe('/api/me/plays', token, { method: 'POST', body: payload });
+  },
+
+  /** 听歌统计聚合 */
+  async stats(token: string, days = 14): Promise<PlayStats> {
+    return callMe<PlayStats>(`/api/me/stats?days=${days}`, token);
+  },
 };
+
+/** 听歌统计的返回结构（与后端 /api/me/stats 对齐） */
+export interface PlayStats {
+  overview: {
+    totalPlays: number;
+    totalSeconds: number;
+    distinctSongs: number;
+    distinctArtists: number;
+    firstPlayedAt: number | null;
+  };
+  topArtists: { artist: string; plays: number; seconds: number }[];
+  topSongs: { songId: string; title: string; artist: string; plays: number }[];
+  byHour: { hour: number; plays: number }[];
+  byDay: { date: string; plays: number }[];
+  days: number;
+}
 
 export const store = {
   getSession(): Session | null {
@@ -439,6 +491,98 @@ export const store = {
   setVolume(v: number): void {
     try {
       window.localStorage.setItem('qqmusic.volume', String(v));
+    } catch {
+      /* 忽略 */
+    }
+  },
+
+  /** 歌词页是否显示中文译文（默认开） */
+  getShowTranslation(): boolean {
+    try {
+      return window.localStorage.getItem('qqmusic.lyrics.translation') !== '0';
+    } catch {
+      return true;
+    }
+  },
+  setShowTranslation(v: boolean): void {
+    try {
+      window.localStorage.setItem('qqmusic.lyrics.translation', v ? '1' : '0');
+    } catch {
+      /* 忽略 */
+    }
+  },
+
+  /* ── 播放器现场：刷新页面后恢复队列与进度 ── */
+
+  /**
+   * 读取上次的播放队列。
+   * 存的是完整 Song 对象（而不是只存 id 再去曲库里查），因为恢复时机早于曲库加载，
+   * 且用户可能播放过已从曲库下架的歌曲。
+   */
+  getPlayer(): PersistedPlayer | null {
+    try {
+      const raw = window.localStorage.getItem(PLAYER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<PersistedPlayer>;
+      if (!Array.isArray(parsed?.queue)) return null;
+      // 逐条校验，避免旧版本残留结构或手工改坏的数据把播放器带崩
+      const queue = parsed.queue.filter(
+        (item): item is Song =>
+          !!item && typeof item.id === 'string' && typeof item.name === 'string' && typeof item.src === 'string',
+      );
+      if (!queue.length) return null;
+      const mode: PlayMode = parsed.mode === 'single' || parsed.mode === 'random' ? parsed.mode : 'loop';
+      const index = Number(parsed.index);
+      return {
+        queue: queue.slice(0, MAX_PERSISTED_QUEUE),
+        index: Number.isInteger(index) && index >= 0 && index < queue.length ? index : 0,
+        mode,
+      };
+    } catch {
+      return null;
+    }
+  },
+  savePlayer(state: PersistedPlayer): void {
+    try {
+      window.localStorage.setItem(
+        PLAYER_KEY,
+        JSON.stringify({ ...state, queue: state.queue.slice(0, MAX_PERSISTED_QUEUE) }),
+      );
+    } catch {
+      /* 队列过大或隐私模式：放弃持久化，不影响播放 */
+    }
+  },
+  clearPlayer(): void {
+    try {
+      window.localStorage.removeItem(PLAYER_KEY);
+      window.localStorage.removeItem(PLAYER_POS_KEY);
+    } catch {
+      /* 忽略 */
+    }
+  },
+  /** 读取上次的播放进度（带 songId，只有对得上当前曲目才采用） */
+  getPlayerPos(): PersistedPosition | null {
+    try {
+      const raw = window.localStorage.getItem(PLAYER_POS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<PersistedPosition>;
+      const progress = Number(parsed?.progress);
+      if (!parsed?.songId || !Number.isFinite(progress) || progress <= 0) return null;
+      return { songId: parsed.songId, progress };
+    } catch {
+      return null;
+    }
+  },
+  savePlayerPos(pos: PersistedPosition): void {
+    try {
+      window.localStorage.setItem(PLAYER_POS_KEY, JSON.stringify(pos));
+    } catch {
+      /* 忽略 */
+    }
+  },
+  clearPlayerPos(): void {
+    try {
+      window.localStorage.removeItem(PLAYER_POS_KEY);
     } catch {
       /* 忽略 */
     }

@@ -4,9 +4,10 @@ import Cover from '../components/Cover';
 import SongList from '../components/SongList';
 import PlaylistCard from '../components/PlaylistCard';
 import Empty from '../components/Empty';
+import { SongListSkeleton, ArtistGridSkeleton } from '../components/Skeleton';
 import { SONGS as STATIC_SONGS } from '../data/songs';
 import { PLAYLISTS } from '../data/playlists';
-import { useSongs } from '../store/catalog';
+import { useCatalogLoading, useSongs } from '../store/catalog';
 import { store } from '../lib/db';
 import { SearchIcon } from '../components/Icons';
 
@@ -20,6 +21,7 @@ export default function Search() {
   const [tab, setTab] = useState<Tab>('song');
   const [history, setHistory] = useState<string[]>(() => store.getSearchHistory());
   const songsInLibrary = useSongs();
+  const loading = useCatalogLoading();
   // 曲库还没加载完时先用静态数据兜底，避免首屏搜索为空
   const catalog = songsInLibrary.length ? songsInLibrary : STATIC_SONGS;
 
@@ -132,45 +134,56 @@ export default function Search() {
         </button>
       </div>
 
-      {!hasResult ? (
-        <Empty title={`没有找到与“${keyword}”相关的结果`} desc="换一个关键词试试，比如歌手名或歌名" />
-      ) : null}
-
-      {hasResult && tab === 'song' ? (
-        songs.length ? (
-          <SongList songs={songs} context={songs} />
+      {/* 曲库还在加载时先出骨架，避免先按静态曲库算出一版结果再被接口数据替换 */}
+      {loading ? (
+        tab === 'song' ? (
+          <SongListSkeleton rows={8} />
         ) : (
-          <Empty title="没有匹配的单曲" />
+          <ArtistGridSkeleton count={tab === 'artist' ? 12 : 5} />
         )
-      ) : null}
+      ) : (
+        <>
+          {!hasResult ? (
+            <Empty title={`没有找到与“${keyword}”相关的结果`} desc="换一个关键词试试，比如歌手名或歌名" />
+          ) : null}
 
-      {hasResult && tab === 'playlist' ? (
-        playlists.length ? (
-          <div className="playlist-grid">
-            {playlists.map((playlist) => (
-              <PlaylistCard key={playlist.id} playlist={playlist} />
-            ))}
-          </div>
-        ) : (
-          <Empty title="没有匹配的歌单" />
-        )
-      ) : null}
+          {hasResult && tab === 'song' ? (
+            songs.length ? (
+              <SongList songs={songs} context={songs} />
+            ) : (
+              <Empty title="没有匹配的单曲" />
+            )
+          ) : null}
 
-      {hasResult && tab === 'artist' ? (
-        artists.length ? (
-          <div className="artist-grid">
-            {artists.map((artist) => (
-              <Link key={artist.name} className="artist-card" to={`/artist/${encodeURIComponent(artist.name)}`}>
-                <Cover src={artist.cover} name={artist.name} size={128} rounded />
-                <p className="artist-name">{artist.name}</p>
-                <p className="artist-count">{artist.count} 首歌曲</p>
-              </Link>
-            ))}
-          </div>
-        ) : (
-          <Empty title="没有匹配的歌手" />
-        )
-      ) : null}
+          {hasResult && tab === 'playlist' ? (
+            playlists.length ? (
+              <div className="playlist-grid">
+                {playlists.map((playlist) => (
+                  <PlaylistCard key={playlist.id} playlist={playlist} />
+                ))}
+              </div>
+            ) : (
+              <Empty title="没有匹配的歌单" />
+            )
+          ) : null}
+
+          {hasResult && tab === 'artist' ? (
+            artists.length ? (
+              <div className="artist-grid">
+                {artists.map((artist) => (
+                  <Link key={artist.name} className="artist-card" to={`/artist/${encodeURIComponent(artist.name)}`}>
+                    <Cover src={artist.cover} name={artist.name} size={128} rounded />
+                    <p className="artist-name">{artist.name}</p>
+                    <p className="artist-count">{artist.count} 首歌曲</p>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <Empty title="没有匹配的歌手" />
+            )
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

@@ -928,9 +928,68 @@ body.is-dragging .slider-thumb {
   gap: 10px;
   padding: 7px 8px;
   border-radius: 9px;
+  /* 拖动排序时不要有过渡，否则插入位置提示会闪 */
+  position: relative;
 }
 
 .queue-row:hover {
+  background: var(--bg-hover);
+}
+
+/* ── 拖动排序 ── */
+
+.queue-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  margin-left: -4px;
+  color: var(--text-5);
+  /* 默认淡显而不是完全隐藏：否则用户不知道这里能拖 */
+  opacity: 0.35;
+  cursor: grab;
+  transition: opacity 0.16s ease, color 0.16s ease;
+}
+
+.queue-row:hover .queue-handle {
+  opacity: 1;
+}
+
+.queue-handle:hover {
+  color: var(--text-2);
+}
+
+.queue-handle:active {
+  cursor: grabbing;
+}
+
+/* 键盘聚焦时手柄必须可见，否则看不出焦点在哪一行 */
+.queue-handle:focus-visible {
+  opacity: 1;
+  color: var(--text-2);
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.queue-row.is-dragging {
+  opacity: 0.4;
+}
+
+/* 插入位置提示：拖到哪一行，就在那一行的上边画一条线 */
+.queue-row.is-drop-target::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--green);
+}
+
+.queue-row.is-drop-target {
   background: var(--bg-hover);
 }
 
@@ -994,7 +1053,14 @@ body.is-dragging .slider-thumb {
   padding: 10px 16px;
   border-top: 1px solid var(--line);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.queue-hint {
+  font-size: 12px;
+  color: var(--text-5);
 }
 
 .queue-foot .btn-ghost {
@@ -1052,4 +1118,22 @@ body.is-dragging .slider-thumb {
   color: var(--green-strong);
   font-weight: 600;
   background: var(--green-50);
+}
+
+/* ---------- 双语歌词（抽屉里空间小，译文压得更紧） ---------- */
+
+.queue-drawer .lyric-text {
+  display: block;
+}
+
+.queue-drawer .lyric-trans {
+  display: block;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-5);
+}
+
+.queue-drawer .lyric-line.is-active .lyric-trans {
+  color: var(--text-3);
 }
