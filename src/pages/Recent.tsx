@@ -1,4 +1,6 @@
+import { useMemo, useState } from 'react';
 import SongList from '../components/SongList';
+import SongSortBar, { DEFAULT_SONG_SORT, sortSongs, type SongSort } from '../components/SongSortBar';
 import Empty from '../components/Empty';
 import { useSongMap } from '../store/catalog';
 import { useAuth } from '../store/auth';
@@ -12,16 +14,20 @@ export default function Recent() {
   const clearRecent = useLibrary((s) => s.clearRecent);
   const playQueue = usePlayer((s) => s.playQueue);
   const songMap = useSongMap();
+  const [sort, setSort] = useState<SongSort>(DEFAULT_SONG_SORT);
 
-  const songs = recent
-    .map((id) => songMap[id])
-    .filter((song): song is NonNullable<typeof song> => Boolean(song));
+  const baseSongs = useMemo(
+    () => recent.map((id) => songMap[id]).filter((song): song is NonNullable<typeof song> => Boolean(song)),
+    [recent, songMap],
+  );
+  const songs = useMemo(() => sortSongs(baseSongs, sort), [baseSongs, sort]);
 
   return (
     <div className="page">
       <header className="section-head">
         <h3 className="section-title">最近播放</h3>
-        <div className="section-actions">
+        <div className="section-tools">
+          {songs.length > 1 ? <SongSortBar value={sort} onChange={setSort} /> : null}
           <button
             type="button"
             className="btn btn-primary btn-sm"

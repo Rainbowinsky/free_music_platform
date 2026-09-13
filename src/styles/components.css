@@ -1244,3 +1244,53 @@
     opacity: 0.65;
   }
 }
+
+/* ── section-head 右侧工具组（排序条 + 数量/按钮）── */
+
+.section-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ── 列表排序工具条 ── */
+
+.sortbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--bg-2);
+}
+
+.sortbar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-3);
+  transition: all 0.15s ease;
+}
+
+.sortbar-item:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+
+.sortbar-item.is-active {
+  color: var(--green);
+  background: var(--green-50);
+  font-weight: 500;
+}
+
+.sortbar-arrow {
+  font-size: 11px;
+  line-height: 1;
+}

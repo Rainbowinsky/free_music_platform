@@ -1,9 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/auth';
 import { useTheme, type ThemeMode } from '../store/theme';
+import { useSongs } from '../store/catalog';
+import { usePlayer } from '../store/player';
+import { useUi } from '../store/ui';
 import { store } from '../lib/db';
 import { adminAuth } from '../lib/adminApi';
+import type { Song } from '../types';
+import Cover from './Cover';
 import {
   AutoThemeIcon,
   CheckIcon,
@@ -29,6 +34,22 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: JSX.Element }[] = 
   { value: 'system', label: '跟随系统', icon: <AutoThemeIcon size={16} /> },
 ];
 
+/** 最多展示几条联想 */
+const SUGGEST_LIMIT = 8;
+
+/** 命中关键词的部分染上主题色；没命中（例如按歌手匹配到的歌名）原样返回 */
+function highlight(text: string, keyword: string): JSX.Element {
+  const idx = text.toLowerCase().indexOf(keyword);
+  if (idx < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark>{text.slice(idx, idx + keyword.length)}</mark>
+      {text.slice(idx + keyword.length)}
+    </>
+  );
+}
+
 export default function TopBar() {
   const user = useAuth((s) => s.user);
   const openModal = useAuth((s) => s.openModal);
@@ -38,21 +59,49 @@ export default function TopBar() {
   const setThemeMode = useTheme((s) => s.setMode);
   const navigate = useNavigate();
   const location = useLocation();
+  const allSongs = useSongs();
+  const playSong = usePlayer((s) => s.playSong);
+  const toast = useUi((s) => s.toast);
   const [keyword, setKeyword] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [sugOpen, setSugOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const menuRef = useRef<HTMLDivElement>(null);
   const themeRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLFormElement>(null);
   // 已经在浏览器里登录过管理台（localStorage 有 JWT）时可以直达；
   // 主站账号如果是 admin 角色（与管理台共用 users 表）也一并算作「可进管理台」
   const [adminUser] = useState(() => adminAuth.getUser());
   const canAdmin = Boolean(adminUser) || user?.role === 'admin';
+
+  const query = keyword.trim().toLowerCase();
+
+  /** 实时联想：曲库在前端内存里，直接过滤，零后端请求 */
+  const suggestions = useMemo<Song[]>(() => {
+    if (!query) return [];
+    const picked: Song[] = [];
+    for (const song of allSongs) {
+      if (
+        song.name.toLowerCase().includes(query) ||
+        song.artist.toLowerCase().includes(query) ||
+        song.album.toLowerCase().includes(query)
+      ) {
+        picked.push(song);
+        if (picked.length >= SUGGEST_LIMIT) break;
+      }
+    }
+    return picked;
+  }, [query, allSongs]);
 
   useEffect(() => {
     if (location.pathname === '/search') {
       const params = new URLSearchParams(location.search);
       setKeyword(params.get('q') ?? '');
     }
+    // 路由变化时收起联想，避免跨页还挂着
+    setSugOpen(false);
+    setActiveIdx(-1);
   }, [location.pathname, location.search]);
 
   useEffect(() => {
@@ -60,17 +109,59 @@ export default function TopBar() {
       const target = event.target as Node;
       if (menuRef.current && !menuRef.current.contains(target)) setMenuOpen(false);
       if (themeRef.current && !themeRef.current.contains(target)) setThemeOpen(false);
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setSugOpen(false);
+        setActiveIdx(-1);
+      }
     };
     document.addEventListener('mousedown', handleDown);
     return () => document.removeEventListener('mousedown', handleDown);
   }, []);
+
+  const closeSug = () => {
+    setSugOpen(false);
+    setActiveIdx(-1);
+  };
+
+  const handleChange = (value: string) => {
+    setKeyword(value);
+    setActiveIdx(-1);
+    setSugOpen(Boolean(value.trim()));
+  };
+
+  /** 点联想项直接开播（上下文用当前联想列表，后续 next/prev 顺着它走） */
+  const playSuggestion = (song: Song) => {
+    closeSug();
+    if (song.playable === false || !song.src) {
+      toast(`《${song.name}》暂无可用音源${song.externalUrl ? '，可点击「官方收听」跳转' : ''}`);
+      return;
+    }
+    playSong(song, suggestions);
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     const q = keyword.trim();
     if (!q) return;
     store.pushSearchHistory(q);
+    closeSug();
     navigate(`/search?q=${encodeURIComponent(q)}`);
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!sugOpen || !suggestions.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIdx((i) => (i + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
+    } else if (event.key === 'Escape') {
+      closeSug();
+    } else if (event.key === 'Enter' && activeIdx >= 0 && activeIdx < suggestions.length) {
+      event.preventDefault();
+      playSuggestion(suggestions[activeIdx]);
+    }
   };
 
   return (
@@ -99,23 +190,72 @@ export default function TopBar() {
           ))}
         </nav>
 
-        <form className="search" onSubmit={handleSubmit} role="search">
+        <form className="search" onSubmit={handleSubmit} role="search" ref={searchRef}>
           <SearchIcon size={17} className="search-icon" />
           <input
             className="search-input"
             value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
+            onChange={(event) => handleChange(event.target.value)}
+            onFocus={() => {
+              if (keyword.trim()) setSugOpen(true);
+            }}
+            onKeyDown={handleSearchKeyDown}
             placeholder="搜索音乐、歌手、歌单"
             aria-label="搜索音乐、歌手、歌单"
+            aria-expanded={sugOpen && Boolean(query)}
+            role="combobox"
+            aria-controls="search-suggest"
+            aria-autocomplete="list"
+            autoComplete="off"
           />
           {keyword ? (
-            <button type="button" className="search-clear" aria-label="清空" onClick={() => setKeyword('')}>
+            <button
+              type="button"
+              className="search-clear"
+              aria-label="清空"
+              onClick={() => {
+                setKeyword('');
+                closeSug();
+              }}
+            >
               <CloseIcon size={13} />
             </button>
           ) : null}
           <button type="submit" className="search-btn">
             搜索
           </button>
+
+          {/* 实时联想：歌名 / 歌手 / 专辑前缀匹配，点击直接开播；回车仍进全文搜索页 */}
+          {sugOpen && query ? (
+            suggestions.length ? (
+              <div className="search-sug" id="search-suggest" role="listbox" aria-label="搜索联想">
+                {suggestions.map((song, i) => (
+                  <button
+                    type="button"
+                    key={`${song.id}-${i}`}
+                    role="option"
+                    aria-selected={i === activeIdx}
+                    className={`search-sug-item ${i === activeIdx ? 'is-active' : ''}`}
+                    onMouseEnter={() => setActiveIdx(i)}
+                    onClick={() => playSuggestion(song)}
+                  >
+                    <Cover src={song.cover} name={song.name} size={32} radius={4} className="search-sug-cover" />
+                    <span className="search-sug-main">
+                      <span className="search-sug-name">{highlight(song.name, query)}</span>
+                      <span className="search-sug-artist">{song.artist}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="search-sug is-empty">
+                <span className="search-sug-note">
+                  没有匹配「{keyword.trim()}」的歌曲
+                  <em>回车或点「搜索」查看全文搜索结果</em>
+                </span>
+              </div>
+            )
+          ) : null}
         </form>
 
         <div className="topbar-right">

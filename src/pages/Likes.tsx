@@ -1,5 +1,7 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import SongList from '../components/SongList';
+import SongSortBar, { DEFAULT_SONG_SORT, sortSongs, type SongSort } from '../components/SongSortBar';
 import Empty from '../components/Empty';
 import { useSongMap } from '../store/catalog';
 import { useAuth } from '../store/auth';
@@ -13,6 +15,13 @@ export default function Likes() {
   const liked = useLibrary((s) => s.liked);
   const playQueue = usePlayer((s) => s.playQueue);
   const songMap = useSongMap();
+  const [sort, setSort] = useState<SongSort>(DEFAULT_SONG_SORT);
+
+  const baseSongs = useMemo(
+    () => liked.map((id) => songMap[id]).filter((song): song is NonNullable<typeof song> => Boolean(song)),
+    [liked, songMap],
+  );
+  const songs = useMemo(() => sortSongs(baseSongs, sort), [baseSongs, sort]);
 
   if (!user) {
     return (
@@ -28,8 +37,6 @@ export default function Likes() {
       />
     );
   }
-
-  const songs = liked.map((id) => songMap[id]).filter((song): song is NonNullable<typeof song> => Boolean(song));
 
   return (
     <div className="page">
@@ -58,7 +65,10 @@ export default function Likes() {
       <section className="section">
         <header className="section-head">
           <h3 className="section-title">歌曲列表</h3>
-          <span className="section-sub">{songs.length} 首</span>
+          <div className="section-tools">
+            {songs.length > 1 ? <SongSortBar value={sort} onChange={setSort} /> : null}
+            <span className="section-sub">{songs.length} 首</span>
+          </div>
         </header>
         {songs.length ? (
           <SongList songs={songs} context={songs} />

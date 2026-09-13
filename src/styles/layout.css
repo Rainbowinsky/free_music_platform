@@ -189,6 +189,8 @@
   background: var(--bg-2);
   border: 1px solid transparent;
   transition: all 0.18s ease;
+  /* 联想下拉的定位基准 */
+  position: relative;
 }
 
 .search:focus-within {
@@ -239,6 +241,101 @@
 
 .search-btn:hover {
   background: var(--green-600);
+}
+
+/* ── 搜索实时联想 ── */
+
+.search-sug {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  animation: sug-in 0.14s ease;
+}
+
+@keyframes sug-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.search-sug-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.search-sug-item:hover,
+.search-sug-item.is-active {
+  background: var(--bg-2);
+}
+
+.search-sug-cover {
+  flex: none;
+}
+
+.search-sug-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.search-sug-name {
+  font-size: 13px;
+  color: var(--text-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-sug-name mark {
+  background: transparent;
+  color: var(--green);
+}
+
+.search-sug-artist {
+  font-size: 12px;
+  color: var(--text-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-sug.is-empty {
+  padding: 14px 10px;
+}
+
+.search-sug-note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-4);
+  text-align: center;
+}
+
+.search-sug-note em {
+  font-style: normal;
+  color: var(--text-5);
 }
 
 .topbar-right {

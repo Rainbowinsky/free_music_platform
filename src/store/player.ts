@@ -180,6 +180,11 @@ export const usePlayer = create<PlayerState>((set, get) => {
       const song = get().current;
       if (song && Number.isFinite(pos) && pos > 0) store.savePlayerPos({ songId: song.id, progress: pos });
     }
+
+    // 同步系统媒体面板的进度（锁屏 / 媒体键弹窗显示）
+    updatePositionState();
+    // 临近结尾：提前拉取下一首音源，消除切歌时的加载空窗
+    if (Number.isFinite(audio.duration) && audio.duration - pos <= PRELOAD_AHEAD_S) ensurePreload();
   });
   audio.addEventListener('seeked', () => {
     seeking = false;
@@ -190,9 +195,13 @@ export const usePlayer = create<PlayerState>((set, get) => {
   audio.addEventListener('durationchange', () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) set({ duration: audio.duration });
   });
-  audio.addEventListener('play', () => set({ isPlaying: true }));
+  audio.addEventListener('play', () => {
+    set({ isPlaying: true });
+    syncPlaybackState('playing');
+  });
   audio.addEventListener('pause', () => {
     set({ isPlaying: false });
+    syncPlaybackState('paused');
     // 暂停是"用户可能马上关页面"的时刻，这里强制落一次盘
     savePos();
   });
@@ -461,6 +470,137 @@ export const usePlayer = create<PlayerState>((set, get) => {
   };
 });
 
+/* ── MediaSession：系统媒体键 / 锁屏控制面板 ── */
+
+const mediaSession = typeof navigator !== 'undefined' ? navigator.mediaSession : undefined;
+/** 媒体键快进 / 快退的步长（秒） */
+const MEDIA_SEEK_STEP = 10;
+
+/** 相对路径封面 → MediaSession 需要的绝对地址 */
+function artworkOf(song: Song): MediaImage[] {
+  if (!song.cover) return [];
+  try {
+    return [{ src: new URL(song.cover, window.location.href).href, sizes: '512x512' }];
+  } catch {
+    return [];
+  }
+}
+
+/** 当前曲目同步到系统媒体面板（锁屏 / 媒体键弹窗能看到歌名、歌手、封面） */
+function syncMediaSession(song: Song | null): void {
+  if (!mediaSession) return;
+  try {
+    if (!song) {
+      mediaSession.metadata = null;
+      mediaSession.playbackState = 'none';
+      return;
+    }
+    if ('MediaMetadata' in window) {
+      mediaSession.metadata = new MediaMetadata({
+        title: song.name,
+        artist: song.artist,
+        album: song.album,
+        artwork: artworkOf(song),
+      });
+    }
+    mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
+  } catch {
+    /* 个别浏览器实现不完整，忽略 */
+  }
+}
+
+/** 只同步播放 / 暂停状态（metadata 由 syncMediaSession 负责） */
+function syncPlaybackState(state: MediaSessionPlaybackState): void {
+  if (!mediaSession) return;
+  try {
+    mediaSession.playbackState = state;
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 把当前进度报给系统面板，锁屏进度条才会动 */
+function updatePositionState(): void {
+  if (!mediaSession || typeof mediaSession.setPositionState !== 'function') return;
+  try {
+    const duration = audio.duration;
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    mediaSession.setPositionState({
+      duration,
+      playbackRate: audio.playbackRate,
+      position: Math.min(audio.currentTime, duration),
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+if (mediaSession) {
+  const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+    try {
+      mediaSession.setActionHandler(action, handler);
+    } catch {
+      /* 不支持的动作直接忽略 */
+    }
+  };
+  setHandler('play', () => void audio.play());
+  setHandler('pause', () => audio.pause());
+  setHandler('previoustrack', () => usePlayer.getState().prev());
+  setHandler('nexttrack', () => usePlayer.getState().next());
+  setHandler('seekbackward', (details) => {
+    const { progress } = usePlayer.getState();
+    usePlayer.getState().seek(Math.max(0, progress - (details.seekOffset || MEDIA_SEEK_STEP)));
+  });
+  setHandler('seekforward', (details) => {
+    const { progress } = usePlayer.getState();
+    usePlayer.getState().seek(progress + (details.seekOffset || MEDIA_SEEK_STEP));
+  });
+  setHandler('seekto', (details) => {
+    if (typeof details.seekTime === 'number') usePlayer.getState().seek(details.seekTime);
+  });
+}
+
+/* ── 预加载下一首 ── */
+
+/** 还剩多少秒时开始预热下一首 */
+const PRELOAD_AHEAD_S = 20;
+let preloader: HTMLAudioElement | null = null;
+/** 预热器里正在加载的音源，避免重复赋值打断已有请求 */
+let preloadedSrc = '';
+
+/**
+ * 预测「自然播放」时的下一首：
+ *   单曲循环还是本曲（无需预热）；随机不可预测；顺序播到队尾会停止（没有下一首）。
+ */
+function predictNext(): Song | null {
+  const { queue, index, mode } = usePlayer.getState();
+  if (!queue.length || mode === 'single' || mode === 'random') return null;
+  if (index < 0 || index >= queue.length - 1) return null;
+  return queue[index + 1] ?? null;
+}
+
+/** 预热下一首的音源（走 HTTP 缓存），真正切歌时浏览器直接命中缓存，零等待 */
+function ensurePreload(): void {
+  const src = predictNext()?.src || '';
+  if (!src || src === preloadedSrc) return;
+  preloadedSrc = src;
+  if (!preloader) {
+    preloader = new Audio();
+    preloader.preload = 'auto';
+    preloader.muted = true;
+  }
+  preloader.src = src;
+}
+
+/** 清掉预热缓存（队列清空、无下一首时） */
+function dropPreload(): void {
+  if (preloader) {
+    preloader.pause();
+    preloader.removeAttribute('src');
+  }
+  preloadedSrc = '';
+}
+
 /* ── 持久化 ── */
 
 // 队列结构（队列 / 当前下标 / 播放模式）变化时写盘；队列清空则把键整个删掉，
@@ -479,6 +619,18 @@ window.addEventListener('pagehide', () => {
   const pos = audio.currentTime;
   if (Number.isFinite(pos) && pos > 0) store.savePlayerPos({ songId: current.id, progress: pos });
 });
+
+// 当前曲目变化：同步系统媒体面板，并按新队列预热下一首（清空则丢掉预热缓存）
+usePlayer.subscribe((state, prev) => {
+  if (state.current !== prev.current) {
+    syncMediaSession(state.current);
+    if (state.current) ensurePreload();
+    else dropPreload();
+  }
+});
+
+// 刷新页面还原播放现场后也同步一次，锁屏/媒体键面板立刻能看到当前曲目
+syncMediaSession(usePlayer.getState().current);
 
 /**
  * 还原上次的播放现场：把音源挂回 audio 并定位到上次的进度。

@@ -1,6 +1,8 @@
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Cover from '../components/Cover';
 import SongList from '../components/SongList';
+import SongSortBar, { DEFAULT_SONG_SORT, sortSongs, type SongSort } from '../components/SongSortBar';
 import Empty from '../components/Empty';
 import { PLAYLIST_MAP, playlistSongs } from '../data/playlists';
 import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
@@ -28,6 +30,17 @@ export default function PlaylistDetail() {
   const toast = useUi((s) => s.toast);
   const guard = useRequireLogin();
   const songMap = useSongMap();
+  const [sort, setSort] = useState<SongSort>(DEFAULT_SONG_SORT);
+
+  const baseSongs = useMemo(() => {
+    if (userPlaylist) {
+      return userPlaylist.songIds
+        .map((songId) => songMap[songId])
+        .filter((song): song is NonNullable<typeof song> => Boolean(song));
+    }
+    return staticPlaylist ? playlistSongs(staticPlaylist, songMap) : [];
+  }, [userPlaylist, staticPlaylist, songMap]);
+  const songs = useMemo(() => sortSongs(baseSongs, sort), [baseSongs, sort]);
 
   if (!userPlaylist && !staticPlaylist) {
     return (
@@ -44,9 +57,6 @@ export default function PlaylistDetail() {
   }
 
   const isOwn = Boolean(userPlaylist);
-  const songs = userPlaylist
-    ? userPlaylist.songIds.map((songId) => songMap[songId]).filter((song): song is NonNullable<typeof song> => Boolean(song))
-    : playlistSongs(staticPlaylist!, songMap);
 
   const title = userPlaylist ? userPlaylist.title : staticPlaylist!.title;
   const desc = userPlaylist ? userPlaylist.desc : staticPlaylist!.desc;
@@ -114,9 +124,12 @@ export default function PlaylistDetail() {
       <section className="section">
         <header className="section-head">
           <h3 className="section-title">歌曲列表</h3>
-          <span className="section-sub">
-            {songs.length} 首歌{isOwn ? ' · 悬停歌曲可移除' : ''}
-          </span>
+          <div className="section-tools">
+            {songs.length > 1 ? <SongSortBar value={sort} onChange={setSort} /> : null}
+            <span className="section-sub">
+              {songs.length} 首歌{isOwn ? ' · 悬停歌曲可移除' : ''}
+            </span>
+          </div>
         </header>
 
         {isOwn && !songs.length ? (
