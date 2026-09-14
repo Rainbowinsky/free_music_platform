@@ -21,6 +21,7 @@ import Stats from './pages/Stats';
 import Ranking from './pages/Ranking';
 import Artists from './pages/Artists';
 import ArtistDetail from './pages/ArtistDetail';
+import Albums from './pages/Albums';
 import AlbumDetail from './pages/AlbumDetail';
 import NotFound from './pages/NotFound';
 import AdminConsole from './pages/admin/AdminConsole';
@@ -50,9 +51,16 @@ export default function App() {
     boot();
   }, [boot]);
 
+  /**
+   * 路由切换时的滚动策略：
+   *   - 只在「路径」变化时滚动 —— 查询参数变化（比如专辑页切排序）不该把页面猛地弹回顶部，
+   *     那一下瞬间跳动正是用户感知到的「抖动」；
+   *   - 用平滑滚动让换页有个自然的过渡，系统开了「减弱动态效果」则退回瞬间定位。
+   */
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [location.pathname, location.search]);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  }, [location.pathname]);
 
   if (isAdminRoute) {
     return (
@@ -83,6 +91,7 @@ export default function App() {
               <Route path="/ranking" element={<Ranking />} />
               <Route path="/artists" element={<Artists />} />
               <Route path="/artist/:name" element={<ArtistDetail />} />
+              <Route path="/albums" element={<Albums />} />
               <Route path="/album/:id" element={<AlbumDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

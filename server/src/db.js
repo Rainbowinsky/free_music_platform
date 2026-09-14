@@ -175,6 +175,23 @@ const TABLES = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏的官方歌单'`,
 
   /*
+   * 收藏的专辑。
+   * album_id 存 albums.id 的字符串形式（前端 Song.albumId 也是这个 id），
+   * 同样**刻意不加 albums 外键** —— 与 user_collected_playlists 一样的理由：
+   * 管理台删专辑不能连带把用户收藏记录一起删掉。
+   */
+  `CREATE TABLE IF NOT EXISTS user_collected_albums (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    album_id VARCHAR(64) NOT NULL COMMENT 'albums.id（字符串形式，前端直接使用）',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_album (user_id, album_id),
+    KEY idx_user_created (user_id, created_at),
+    CONSTRAINT fk_uca_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏的专辑'`,
+
+  /*
    * 播放埋点：每「真正听完一段」记一行，用于听歌统计。
    *
    * 为什么不复用 user_songs(kind='recent')？因为那是「最近播放列表」，

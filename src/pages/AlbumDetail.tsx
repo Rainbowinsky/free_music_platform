@@ -2,39 +2,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Cover from '../components/Cover';
 import SongList from '../components/SongList';
+import AlbumCard from '../components/AlbumCard';
 import Empty from '../components/Empty';
 import { SongListSkeleton } from '../components/Skeleton';
+import { HeartFilledIcon, HeartIcon, PlayIcon } from '../components/Icons';
 import { usePlayer } from '../store/player';
-import { toSongs, type ApiSong } from '../lib/song';
-import type { Song } from '../types';
-import { PlayIcon } from '../components/Icons';
-
-interface AlbumPayload {
-  album: {
-    id: number;
-    name: string;
-    cover: string;
-    year: string;
-    artistId: number | null;
-    artistName: string;
-  };
-  songs: ApiSong[];
-}
-
-type Status = 'loading' | 'ready' | 'notfound' | 'error';
+import { useLibrary } from '../store/library';
+import { useUi } from '../store/ui';
+import { useRequireLogin } from '../hooks/useRequireLogin';
+import { albumKind, fetchAlbumDetail, type AlbumDetailPayload, type AlbumDetailStatus } from '../lib/album';
+import { formatTotalDuration } from '../utils/format';
+import { primaryArtist } from '../utils/artist';
 
 /**
  * 专辑详情页。
  *
  * 专辑信息（封面、年份、曲目归属）本来就由管理台维护，但主站此前没有专辑维度，
- * 管理员整理好的结构用户完全看不到。这里接的是新增的公开读接口 GET /api/library/albums/:id。
+ * 管理员整理好的结构用户完全看不到。这里接的是公开读接口 GET /api/library/albums/:id，
+ * 并补上同歌手其他专辑 —— 否则看完一张专辑没有出口，页面就是座孤岛。
  */
 export default function AlbumDetail() {
   const { id = '' } = useParams();
   const playQueue = usePlayer((s) => s.playQueue);
+  const collectedAlbums = useLibrary((s) => s.collectedAlbums);
+  const toggleCollectAlbum = useLibrary((s) => s.toggleCollectAlbum);
+  const toast = useUi((s) => s.toast);
+  const guard = useRequireLogin();
 
-  const [data, setData] = useState<AlbumPayload | null>(null);
-  const [status, setStatus] = useState<Status>('loading');
+  const [data, setData] = useState<AlbumDetailPayload | null>(null);
+  const [status, setStatus] = useState<AlbumDetailStatus>('loading');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!id) {
@@ -43,29 +40,22 @@ export default function AlbumDetail() {
     }
     let cancelled = false;
     setStatus('loading');
-    fetch(`/api/library/albums/${encodeURIComponent(id)}`)
-      .then((res) => {
-        if (res.status === 404) {
-          if (!cancelled) setStatus('notfound');
-          return null;
-        }
-        if (!res.ok) throw new Error(`接口返回 ${res.status}`);
-        return res.json() as Promise<AlbumPayload>;
-      })
-      .then((payload) => {
-        if (cancelled || !payload) return;
-        setData(payload);
+    void fetchAlbumDetail(id).then((result) => {
+      if (cancelled) return;
+      if (result.status === 'ready' && result.data) {
+        setData(result.data);
         setStatus('ready');
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('error');
-      });
+        return;
+      }
+      setError(result.error ?? '');
+      setStatus(result.status);
+    });
     return () => {
       cancelled = true;
     };
   }, [id]);
 
-  const songs: Song[] = useMemo(() => toSongs(data?.songs), [data]);
+  const songs = useMemo(() => data?.songs ?? [], [data]);
 
   if (status === 'loading') {
     return (
@@ -83,10 +73,10 @@ export default function AlbumDetail() {
     return (
       <Empty
         title="专辑不存在或已被删除"
-        desc="换一个专辑听听吧"
+        desc="换一张专辑听听吧"
         action={
-          <Link className="btn btn-primary" to="/">
-            回到首页
+          <Link className="btn btn-primary" to="/albums">
+            全部专辑
           </Link>
         }
       />
@@ -97,20 +87,48 @@ export default function AlbumDetail() {
     return (
       <Empty
         title="专辑加载失败"
-        desc="请确认后端已启动（npm run server），或稍后重试"
+        desc={error || '请确认后端已启动（npm run server），或稍后重试'}
         action={
-          <Link className="btn btn-primary" to="/artists">
-            去歌手页
+          <Link className="btn btn-primary" to="/albums">
+            去专辑页
           </Link>
         }
       />
     );
   }
 
-  const { album } = data;
+  const { album, related } = data;
+  const artist = primaryArtist(album.artistName);
+  const kind = albumKind(album.songCount);
+  const isCollected = collectedAlbums.includes(String(album.id));
+  const unplayable = album.songCount - album.playableCount;
+
+  /** 专辑页的元信息：年份 · 类型 · 曲目数 · 总时长，缺项自动跳过 */
+  const meta = [
+    album.year ? `${album.year} 年发行` : '发行年份未知',
+    kind,
+    `共 ${album.songCount} 首`,
+    album.totalDuration ? formatTotalDuration(album.totalDuration) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const firstPlayable = songs.findIndex((song) => song.playable !== false && song.src);
 
   return (
     <div className="page album-detail">
+      <nav className="breadcrumb" aria-label="面包屑">
+        <Link to="/albums">专辑</Link>
+        <span className="breadcrumb-sep">/</span>
+        {artist ? (
+          <>
+            <Link to={`/artist/${encodeURIComponent(artist)}`}>{album.artistName}</Link>
+            <span className="breadcrumb-sep">/</span>
+          </>
+        ) : null}
+        <span className="breadcrumb-current">{album.name}</span>
+      </nav>
+
       <header className="detail-head">
         <Cover src={album.cover} name={album.name} size={196} radius={14} className="detail-cover" />
         <div className="detail-info">
@@ -118,25 +136,40 @@ export default function AlbumDetail() {
           <h2 className="detail-title">{album.name}</h2>
           {album.artistName ? (
             <p className="detail-creator">
-              <span className="avatar avatar-sm">{album.artistName.slice(0, 1)}</span>
-              <Link className="detail-artist-link" to={`/artist/${encodeURIComponent(album.artistName)}`}>
+              <span className="avatar avatar-sm">{artist.slice(0, 1)}</span>
+              <Link className="detail-artist-link" to={`/artist/${encodeURIComponent(artist)}`}>
                 {album.artistName}
               </Link>
             </p>
           ) : null}
-          <p className="detail-desc">{album.year ? `发行于 ${album.year} 年` : '暂无发行年份'}</p>
-          <p className="detail-tags">
-            <span className="detail-stat">共 {songs.length} 首</span>
-          </p>
+          <p className="detail-desc">{meta}</p>
+          {unplayable > 0 ? (
+            <p className="detail-desc album-hint">
+              其中 {unplayable} 首暂无可用音源，可点击行内的「官方收听」跳转
+            </p>
+          ) : null}
           <div className="detail-actions">
             <button
               type="button"
               className="btn btn-primary"
-              disabled={!songs.length}
-              onClick={() => playQueue(songs, 0)}
+              disabled={!songs.length || firstPlayable < 0}
+              onClick={() => playQueue(songs, firstPlayable < 0 ? 0 : firstPlayable)}
             >
               <PlayIcon size={15} />
               播放全部
+            </button>
+            <button
+              type="button"
+              className={`btn btn-outline ${isCollected ? 'is-collected' : ''}`}
+              onClick={() =>
+                guard(async () => {
+                  await toggleCollectAlbum(String(album.id));
+                  toast(isCollected ? '已取消收藏这张专辑' : '已收藏这张专辑');
+                }, '登录后即可收藏专辑，换设备也在')
+              }
+            >
+              {isCollected ? <HeartFilledIcon size={15} /> : <HeartIcon size={15} />}
+              {isCollected ? '已收藏' : '收藏专辑'}
             </button>
           </div>
         </div>
@@ -150,9 +183,25 @@ export default function AlbumDetail() {
         {songs.length ? (
           <SongList songs={songs} context={songs} showAlbum={false} />
         ) : (
-          <Empty title="这张专辑还没有曲目" desc="去管理台补几首歌吧" />
+          <Empty title="这张专辑还没有曲目" desc="去曲库管理台补几首歌吧" />
         )}
       </section>
+
+      {related.length ? (
+        <section className="section">
+          <header className="section-head">
+            <h3 className="section-title">更多来自 {album.artistName}</h3>
+            <Link className="section-more" to={`/artist/${encodeURIComponent(artist)}`}>
+              查看歌手 ›
+            </Link>
+          </header>
+          <div className="album-grid">
+            {related.map((item) => (
+              <AlbumCard key={item.id} album={item} />
+            ))}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

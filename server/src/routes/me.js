@@ -81,10 +81,11 @@ async function songIdsOfPlaylists(playlistIds) {
 
 router.get('/library', async (req, res) => {
   const userId = uid(req);
-  const [liked, recent, collectedRows, playlistRows] = await Promise.all([
+  const [liked, recent, collectedRows, collectedAlbumRows, playlistRows] = await Promise.all([
     idsOf(userId, 'like'),
     idsOf(userId, 'recent', RECENT_LIMIT),
     query('SELECT playlist_id FROM user_collected_playlists WHERE user_id = ? ORDER BY created_at DESC, id DESC', [userId]),
+    query('SELECT album_id FROM user_collected_albums WHERE user_id = ? ORDER BY created_at DESC, id DESC', [userId]),
     query('SELECT * FROM user_playlists WHERE user_id = ? ORDER BY updated_at DESC, id DESC', [userId]),
   ]);
 
@@ -94,6 +95,7 @@ router.get('/library', async (req, res) => {
     liked,
     recent,
     collected: collectedRows.map((r) => r.playlist_id),
+    collectedAlbums: collectedAlbumRows.map((r) => r.album_id),
     playlists: playlistRows.map((p) => mapPlaylist(p, songIdsByPlaylist.get(String(p.id)) ?? [])),
   });
 });
@@ -131,6 +133,31 @@ router.post('/collected/:playlistId', async (req, res) => {
     return res.json({ collected: false });
   }
   await query('INSERT INTO user_collected_playlists (user_id, playlist_id) VALUES (?, ?)', [userId, playlistId]);
+  return res.json({ collected: true });
+});
+
+/* ─────────────── 收藏专辑 ─────────────── */
+
+/**
+ * 切换专辑收藏状态。
+ *
+ * 用 POST 切换（与收藏歌单同一套交互），album_id 存字符串形式：
+ * 前端 Song.albumId 来自后端 albums.id，两边对齐后专辑页的收藏按钮才好判断状态。
+ */
+router.post('/albums/:albumId', async (req, res) => {
+  const userId = uid(req);
+  const albumId = String(req.params.albumId).trim().slice(0, 64);
+  if (!albumId) return res.status(400).json({ error: '缺少专辑 ID' });
+
+  const existing = await queryOne('SELECT id FROM user_collected_albums WHERE user_id = ? AND album_id = ?', [
+    userId,
+    albumId,
+  ]);
+  if (existing) {
+    await query('DELETE FROM user_collected_albums WHERE id = ?', [existing.id]);
+    return res.json({ collected: false });
+  }
+  await query('INSERT INTO user_collected_albums (user_id, album_id) VALUES (?, ?)', [userId, albumId]);
   return res.json({ collected: true });
 });
 

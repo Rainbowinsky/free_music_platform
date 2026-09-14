@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Cover from '../components/Cover';
 import SongList from '../components/SongList';
+import AlbumCard from '../components/AlbumCard';
 import Empty from '../components/Empty';
 import { SongListSkeleton } from '../components/Skeleton';
 import { useSongs } from '../store/catalog';
 import { usePlayer } from '../store/player';
 import { toSongs, type ApiSong } from '../lib/song';
+import { toAlbumList, type ApiAlbum } from '../lib/album';
 import { belongsToArtist } from '../utils/artist';
 import type { Song } from '../types';
 import { PlayIcon } from '../components/Icons';
@@ -14,7 +16,7 @@ import { PlayIcon } from '../components/Icons';
 /** GET /api/library/artists/:id（id 位置同时接受数字主键与歌手名）的返回结构 */
 interface ArtistPayload {
   artist: { id: number; name: string; cover: string };
-  albums: { id: number; name: string; cover: string; year: string }[];
+  albums: ApiAlbum[];
   songs: ApiSong[];
 }
 
@@ -62,7 +64,7 @@ export default function ArtistDetail() {
     return catalog.filter((song) => belongsToArtist(song.artist, artistName));
   }, [data, catalog, artistName]);
 
-  const albums = data?.albums ?? [];
+  const albums = useMemo(() => toAlbumList(data?.albums), [data]);
   const cover = data?.artist?.cover || songs[0]?.cover || '';
 
   if (loading && !songs.length) {
@@ -108,8 +110,20 @@ export default function ArtistDetail() {
                   {album.name}
                 </Link>
               ))}
+              {albums.length > 6 ? (
+                <Link className="tag tag-link" to={`/albums?artist=${encodeURIComponent(artistName)}`}>
+                  全部 {albums.length} 张 ›
+                </Link>
+              ) : null}
             </p>
-          ) : null}
+          ) : (
+            // 接口不可用时也留一个入口，至少能顺着歌手维度去专辑库里找
+            <p className="detail-tags">
+              <Link className="tag tag-link" to={`/albums?artist=${encodeURIComponent(artistName)}`}>
+                在专辑库中查看此人专辑 ›
+              </Link>
+            </p>
+          )}
           <div className="detail-actions">
             <button type="button" className="btn btn-primary" onClick={() => playQueue(songs, 0)}>
               <PlayIcon size={15} />
@@ -127,11 +141,8 @@ export default function ArtistDetail() {
           </header>
           <div className="album-grid">
             {albums.map((album) => (
-              <Link className="album-card" key={album.id} to={`/album/${album.id}`}>
-                <Cover src={album.cover} name={album.name} size={132} radius={10} />
-                <p className="artist-name">{album.name}</p>
-                <p className="artist-count">{album.year || '年份未知'}</p>
-              </Link>
+              // 歌手页整页都是同一位歌手，卡片里不再重复歌手名
+              <AlbumCard key={album.id} album={album} showArtist={false} />
             ))}
           </div>
         </section>

@@ -27,6 +27,23 @@ const mapSong = (row) => ({
   createdAt: row.created_at,
 });
 
+/**
+ * 专辑行 → 前端结构（专辑列表与详情页共用同一套字段）。
+ * 用同一个 mapper 是为了避免列表显示「12 首」、点进去却只有 3 首这种对不上的情况。
+ */
+const mapAlbum = (row) => ({
+  id: Number(row.id),
+  name: row.name,
+  cover: row.cover || '',
+  year: row.year || '',
+  artistId: row.artist_id ?? null,
+  artistName: row.artist_name || '',
+  songCount: Number(row.song_count || 0),
+  playableCount: Number(row.playable_count || 0),
+  /** 曲目总时长（秒），前端用来显示「共 12 首 · 48 分钟」 */
+  totalDuration: Number(row.total_duration || 0),
+});
+
 const mapFeaturedPlaylist = (row, songIds = []) => {
   let tags = [];
   try {
@@ -157,9 +174,18 @@ router.get('/artists/:id', async (req, res) => {
     : await queryOne('SELECT id, name, cover FROM artists WHERE name = ? OR name_key = ?', [raw, artistKey(raw)]);
   if (!artist) return res.status(404).json({ error: '歌手不存在' });
 
-  const albums = await query('SELECT id, name, cover, year FROM albums WHERE artist_id = ? ORDER BY year DESC, id', [
-    artist.id,
-  ]);
+  const albums = await query(
+    // 与 /albums 用同一套聚合字段，歌手页的专辑卡片才能显示「曲目数 / 总时长」
+    `SELECT ${ALBUM_AGGREGATE}
+       FROM albums al
+       LEFT JOIN artists ar ON ar.id = al.artist_id
+       LEFT JOIN songs s ON s.album_id = al.id
+      WHERE al.artist_id = ?
+        AND ${ALBUM_NOT_PLACEHOLDER}
+      GROUP BY al.id
+      ORDER BY COALESCE(NULLIF(al.year, ''), '0000') DESC, al.name ASC`,
+    [artist.id],
+  );
   const songs = await query(
     `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s
@@ -171,53 +197,97 @@ router.get('/artists/:id', async (req, res) => {
   );
   return res.json({
     artist,
-    albums: albums.map((a) => ({ id: a.id, name: a.name, cover: a.cover, year: a.year })),
+    albums: albums.map(mapAlbum),
     songs: songs.map(mapSong),
   });
 });
+
+/** 专辑聚合字段（列表与详情共用，避免两处 SQL 漂移出不同的 song_count） */
+const ALBUM_AGGREGATE = `al.id, al.name, al.year, al.artist_id,
+            MAX(ar.name) AS artist_name,
+            COALESCE(NULLIF(al.cover, ''), MAX(s.cover)) AS cover,
+            COUNT(s.id) AS song_count,
+            SUM(CASE WHEN s.playable = 1 THEN 1 ELSE 0 END) AS playable_count,
+            COALESCE(SUM(s.duration), 0) AS total_duration`;
+
+/**
+ * 占位专辑过滤条件。
+ *
+ * 入库时专辑信息拿不到会被写成「未知专辑」（见 music/importer.js），
+ * 把它当成一张真专辑铺在专辑库里很突兀，所以**列表类**查询一律滤掉；
+ * 但 /albums/:id 仍可直达，歌曲行里的专辑名也照旧显示 —— 只是不给它一个展示位。
+ */
+const ALBUM_NOT_PLACEHOLDER = "al.name NOT IN ('未知专辑', '未知')";
 
 /**
  * 专辑列表（公开读）。
  *
  * 专辑信息本来就由管理台维护（`/api/admin/albums`），主站此前没有任何公开读接口，
- * 导致管理台整理好的封面与年份在主站完全看不到。
+ * 导致管理台整理好的封面与年份在主站完全看不到 —— 专辑页的封面、年份、
+ * 「专辑共几首」全都依赖这里。
+ *
+ * 支持：
+ *   keyword  专辑名 / 歌手名模糊匹配
+ *   artist   按歌手过滤（走 name_key 归一化，与入库时的 findOrCreateArtist 口径一致）
+ *   sort     new（默认，按年份倒序）· hot（曲目最多）· name（专辑名）
+ *   page/size 分页，同时返回 total 供前端显示「共 N 张」
+ *
  * cover 为空时回退到该专辑任一歌曲的封面（与 /artists 同样的理由，避免整页退化成占位图）。
  */
 router.get('/albums', async (req, res) => {
   const keyword = String(req.query.keyword || '').trim();
-  const where = keyword ? 'WHERE al.name LIKE ? OR ar.name LIKE ?' : '';
-  const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
+  const artist = String(req.query.artist || '').trim();
+  const sort = String(req.query.sort || 'new');
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const size = Math.min(120, Math.max(1, Number(req.query.size) || 48));
 
-  const rows = await query(
-    `SELECT al.id, al.name, al.year, al.artist_id,
-            MAX(ar.name) AS artist_name,
-            COALESCE(NULLIF(al.cover, ''), MAX(s.cover)) AS cover,
-            COUNT(s.id) AS song_count,
-            SUM(CASE WHEN s.playable = 1 THEN 1 ELSE 0 END) AS playable_count
-       FROM albums al
-       LEFT JOIN artists ar ON ar.id = al.artist_id
-       LEFT JOIN songs s ON s.album_id = al.id
-       ${where}
-      GROUP BY al.id
-      ORDER BY al.year DESC, al.name ASC`,
+  const where = [ALBUM_NOT_PLACEHOLDER];
+  const params = [];
+  if (keyword) {
+    where.push('(al.name LIKE ? OR ar.name LIKE ?)');
+    params.push(`%${keyword}%`, `%${keyword}%`);
+  }
+  if (artist) {
+    where.push('(ar.name = ? OR ar.name_key = ?)');
+    params.push(artist, artistKey(artist));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  // 排序走白名单，绝不把用户输入直接拼进 ORDER BY
+  const orderSql =
+    sort === 'hot'
+      ? 'song_count DESC, al.name ASC'
+      : sort === 'name'
+        ? 'al.name ASC'
+        : // 年份缺失的专辑不能排在最前（'' 会排最后），统一当成 '0000'
+          "COALESCE(NULLIF(al.year, ''), '0000') DESC, al.name ASC";
+
+  const [{ total }] = await query(
+    `SELECT COUNT(*) AS total FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id ${whereSql}`,
     params,
   );
 
-  res.json({
-    items: rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      cover: r.cover || '',
-      year: r.year || '',
-      artistId: r.artist_id ?? null,
-      artistName: r.artist_name || '',
-      songCount: Number(r.song_count),
-      playableCount: Number(r.playable_count || 0),
-    })),
-  });
+  const rows = await query(
+    `SELECT ${ALBUM_AGGREGATE}
+       FROM albums al
+       LEFT JOIN artists ar ON ar.id = al.artist_id
+       LEFT JOIN songs s ON s.album_id = al.id
+       ${whereSql}
+      GROUP BY al.id
+      ORDER BY ${orderSql}
+      LIMIT ? OFFSET ?`,
+    [...params, size, (page - 1) * size],
+  );
+
+  return res.json({ total: Number(total), page, size, items: rows.map(mapAlbum) });
 });
 
-/** 单个专辑详情（含全部曲目），供新增的专辑页使用 */
+/**
+ * 单个专辑详情：专辑信息 + 全部曲目 + 同歌手其他专辑。
+ *
+ * `related` 是「更多来自这位歌手」，没有它专辑页就是个孤岛 ——
+ * 用户看完一张专辑没法顺着歌手找到下一张。
+ */
 router.get('/albums/:id', async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ error: '专辑 ID 不合法' });
@@ -238,16 +308,35 @@ router.get('/albums/:id', async (req, res) => {
     [album.id],
   );
 
+  const related = album.artist_id
+    ? await query(
+        `SELECT ${ALBUM_AGGREGATE}
+           FROM albums al
+           LEFT JOIN artists ar ON ar.id = al.artist_id
+           LEFT JOIN songs s ON s.album_id = al.id
+          WHERE al.artist_id = ? AND al.id <> ? AND ${ALBUM_NOT_PLACEHOLDER}
+          GROUP BY al.id
+          ORDER BY COALESCE(NULLIF(al.year, ''), '0000') DESC, al.name ASC
+          LIMIT 12`,
+        [album.artist_id, album.id],
+      )
+    : [];
+
   return res.json({
     album: {
-      id: album.id,
+      id: Number(album.id),
       name: album.name,
       cover: album.cover || songs[0]?.cover || '',
       year: album.year || '',
       artistId: album.artist_id ?? null,
       artistName: album.artist_name || '',
+      // 曲目统计按实际取到的 songs 算，与列表页的聚合口径保持一致
+      songCount: songs.length,
+      playableCount: songs.filter((song) => song.playable).length,
+      totalDuration: songs.reduce((sum, song) => sum + Number(song.duration || 0), 0),
     },
     songs: songs.map(mapSong),
+    related: related.map(mapAlbum),
   });
 });
 

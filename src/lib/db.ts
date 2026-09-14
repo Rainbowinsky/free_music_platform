@@ -245,6 +245,8 @@ async function callMe<T>(path: string, token: string, init?: { method?: string; 
 export interface LibrarySnapshot {
   liked: string[];
   collected: string[];
+  /** 收藏的专辑 id（albums.id 的字符串形式） */
+  collectedAlbums: string[];
   recent: string[];
   playlists: UserPlaylist[];
 }
@@ -255,12 +257,14 @@ export const meApi = {
     const data = await callMe<{
       liked?: string[];
       collected?: string[];
+      collectedAlbums?: string[];
       recent?: string[];
       playlists?: Parameters<typeof toPlaylist>[0][];
     }>('/api/me/library', token);
     return {
       liked: data.liked ?? [],
       collected: data.collected ?? [],
+      collectedAlbums: data.collectedAlbums ?? [],
       recent: data.recent ?? [],
       playlists: (data.playlists ?? []).map(toPlaylist),
     };
@@ -272,6 +276,13 @@ export const meApi = {
 
   async toggleCollect(token: string, playlistId: string): Promise<{ collected: boolean }> {
     return callMe<{ collected: boolean }>(`/api/me/collected/${encodeURIComponent(playlistId)}`, token, {
+      method: 'POST',
+    });
+  },
+
+  /** 切换专辑收藏（与收藏歌单同一套交互） */
+  async toggleCollectAlbum(token: string, albumId: string): Promise<{ collected: boolean }> {
+    return callMe<{ collected: boolean }>(`/api/me/albums/${encodeURIComponent(albumId)}`, token, {
       method: 'POST',
     });
   },

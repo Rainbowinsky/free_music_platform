@@ -25,6 +25,7 @@ const NAV = [
   { to: '/likes', label: '我的音乐', end: false },
   { to: '/collection', label: '我的收藏', end: false },
   { to: '/artists', label: '歌手', end: false },
+  { to: '/albums', label: '专辑', end: false },
 ];
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: JSX.Element }[] = [
@@ -200,8 +201,8 @@ export default function TopBar() {
               if (keyword.trim()) setSugOpen(true);
             }}
             onKeyDown={handleSearchKeyDown}
-            placeholder="搜索音乐、歌手、歌单"
-            aria-label="搜索音乐、歌手、歌单"
+            placeholder="搜索音乐、歌手、专辑、歌单"
+            aria-label="搜索音乐、歌手、专辑、歌单"
             aria-expanded={sugOpen && Boolean(query)}
             role="combobox"
             aria-controls="search-suggest"

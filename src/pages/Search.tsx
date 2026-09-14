@@ -1,20 +1,25 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Cover from '../components/Cover';
 import SongList from '../components/SongList';
 import PlaylistCard from '../components/PlaylistCard';
+import AlbumCard from '../components/AlbumCard';
 import Empty from '../components/Empty';
-import { SongListSkeleton, ArtistGridSkeleton } from '../components/Skeleton';
+import { ArtistGridSkeleton, AlbumGridSkeleton, SongListSkeleton } from '../components/Skeleton';
 import { SONGS as STATIC_SONGS } from '../data/songs';
 import { useCatalogLoading, useSongs } from '../store/catalog';
 import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
 import { store } from '../lib/db';
+import { fetchAlbumDetail, fetchAlbums } from '../lib/album';
+import { usePlayer } from '../store/player';
+import { useUi } from '../store/ui';
 import { primaryArtist } from '../utils/artist';
 import { SearchIcon } from '../components/Icons';
+import type { Album } from '../types';
 
-type Tab = 'song' | 'playlist' | 'artist';
+type Tab = 'song' | 'artist' | 'album' | 'playlist';
 
-const HOT_KEYWORDS = ['海阔天空', '起风了', '周杰伦', '许嵩', '五月天', '成都', '治愈', '摇滚'];
+const HOT_KEYWORDS = ['海阔天空', '起风了', '周杰伦', '许嵩', '五月天', '成都', '叶惠美', '摇滚'];
 
 export default function Search() {
   const [params] = useSearchParams();
@@ -25,10 +30,84 @@ export default function Search() {
   const loading = useCatalogLoading();
   // 歌单与首页 / 我的收藏共用同一数据源（DB 优先），否则管理台新建的歌单搜不到
   const featuredPlaylists = useFeaturedPlaylistItems();
+  const playQueue = usePlayer((s) => s.playQueue);
+  const toast = useUi((s) => s.toast);
   // 曲库还没加载完时先用静态数据兜底，避免首屏搜索为空
   const catalog = songsInLibrary.length ? songsInLibrary : STATIC_SONGS;
 
+  /**
+   * 后端专辑搜索结果，连同它对应的关键词一起存。
+   * 只存结果数组的话，换关键词后新结果到达前会一直显示上一次的专辑，数量也对不上。
+   */
+  const [apiAlbums, setApiAlbums] = useState<{ keyword: string; items: Album[] } | null>(null);
+  const [albumLoading, setAlbumLoading] = useState(false);
+  const [albumFailed, setAlbumFailed] = useState(false);
+  const [preparing, setPreparing] = useState<number | null>(null);
+
   const lower = keyword.toLowerCase();
+
+  // App 只在路径变化时滚动，关键词变化（在同一个搜索页里换了词）由这里自己回到顶部
+  useEffect(() => {
+    if (keyword) window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [keyword]);
+
+  /**
+   * 专辑维度走后端接口：专辑名、年份、封面、曲目数都只存在 albums 表里，
+   * 拿曲库里的歌在前端聚合是补不出年份和专辑封面的，所以接口失败就如实报错、不伪造数据。
+   */
+  useEffect(() => {
+    if (!keyword) {
+      setApiAlbums(null);
+      setAlbumFailed(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setAlbumLoading(true);
+    fetchAlbums({ keyword, size: 60 })
+      .then((result) => {
+        if (cancelled) return;
+        setApiAlbums({ keyword, items: result.items });
+        setAlbumFailed(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setApiAlbums(null);
+        setAlbumFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAlbumLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [keyword]);
+
+  const albums = useMemo<Album[]>(
+    // 结果必须和当前关键词对得上，否则换词后新结果到达前会显示上一次的专辑
+    () => (apiAlbums && apiAlbums.keyword === keyword ? apiAlbums.items : []),
+    [apiAlbums, keyword],
+  );
+
+  const playAlbum = async (album: Album) => {
+    if (preparing !== null) return;
+    setPreparing(album.id);
+    try {
+      const result = await fetchAlbumDetail(album.id);
+      if (result.status !== 'ready' || !result.data?.songs.length) {
+        toast(result.status === 'error' ? '曲目加载失败，请确认后端已启动' : `《${album.name}》还没有曲目`);
+        return;
+      }
+      const queue = result.data.songs;
+      const start = queue.findIndex((song) => song.playable !== false && song.src);
+      if (start < 0) {
+        toast(`《${album.name}》暂无可用音源`);
+        return;
+      }
+      playQueue(queue, start);
+    } finally {
+      setPreparing(null);
+    }
+  };
 
   const songs = useMemo(
     () =>
@@ -70,7 +149,7 @@ export default function Search() {
     return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [lower, catalog]);
 
-  const hasResult = songs.length + playlists.length + artists.length > 0;
+  const hasResult = songs.length + playlists.length + artists.length + albums.length > 0;
 
   if (!keyword) {
     return (
@@ -128,17 +207,20 @@ export default function Search() {
         </button>
         <button
           type="button"
-          className={`tab ${tab === 'playlist' ? 'is-active' : ''}`}
-          onClick={() => setTab('playlist')}
-        >
-          歌单 <em>{playlists.length}</em>
-        </button>
-        <button
-          type="button"
           className={`tab ${tab === 'artist' ? 'is-active' : ''}`}
           onClick={() => setTab('artist')}
         >
           歌手 <em>{artists.length}</em>
+        </button>
+        <button type="button" className={`tab ${tab === 'album' ? 'is-active' : ''}`} onClick={() => setTab('album')}>
+          专辑 <em>{albums.length}</em>
+        </button>
+        <button
+          type="button"
+          className={`tab ${tab === 'playlist' ? 'is-active' : ''}`}
+          onClick={() => setTab('playlist')}
+        >
+          歌单 <em>{playlists.length}</em>
         </button>
       </div>
 
@@ -146,8 +228,10 @@ export default function Search() {
       {loading ? (
         tab === 'song' ? (
           <SongListSkeleton rows={8} />
+        ) : tab === 'album' || tab === 'playlist' ? (
+          <AlbumGridSkeleton count={12} />
         ) : (
-          <ArtistGridSkeleton count={tab === 'artist' ? 12 : 5} />
+          <ArtistGridSkeleton count={12} />
         )
       ) : (
         <>
@@ -160,6 +244,27 @@ export default function Search() {
               <SongList songs={songs} context={songs} />
             ) : (
               <Empty title="没有匹配的单曲" />
+            )
+          ) : null}
+
+          {hasResult && tab === 'album' ? (
+            albums.length ? (
+              <div className="album-grid">
+                {albums.map((album) => (
+                  <AlbumCard
+                    key={album.id}
+                    album={album}
+                    onPlay={() => void playAlbum(album)}
+                    playLoading={preparing === album.id}
+                  />
+                ))}
+              </div>
+            ) : albumLoading ? (
+              <AlbumGridSkeleton count={12} />
+            ) : albumFailed ? (
+              <Empty title="专辑搜索暂时不可用" desc="请确认后端已启动（npm run server），然后刷新本页" />
+            ) : (
+              <Empty title="没有匹配的专辑" />
             )
           ) : null}
 

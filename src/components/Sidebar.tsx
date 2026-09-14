@@ -11,6 +11,7 @@ import Cover from './Cover';
 import {
   ChartIcon,
   ClockIcon,
+  DiscIcon,
   HeartFilledIcon,
   ListIcon,
   MusicNoteIcon,
@@ -25,6 +26,7 @@ const NAV_GROUPS = [
       { to: '/', label: '发现音乐', icon: <MusicNoteIcon size={17} />, end: true },
       { to: '/ranking', label: '排行榜', icon: <ListIcon size={17} />, end: false },
       { to: '/artists', label: '歌手', icon: <MusicNoteIcon size={17} />, end: false },
+      { to: '/albums', label: '专辑', icon: <DiscIcon size={17} />, end: false },
     ],
   },
   {

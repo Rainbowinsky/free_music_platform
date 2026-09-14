@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Banner from '../components/Banner';
 import PlaylistCard from '../components/PlaylistCard';
 import SongList from '../components/SongList';
+import AlbumCard from '../components/AlbumCard';
 import Cover from '../components/Cover';
 import { playlistSongs } from '../data/playlists';
 import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
@@ -9,7 +11,9 @@ import { useCatalogLoading, useSongs, useSongMap } from '../store/catalog';
 import { SongListSkeleton } from '../components/Skeleton';
 import { usePlayer } from '../store/player';
 import { PlayIcon } from '../components/Icons';
+import { fetchAlbums } from '../lib/album';
 import { formatCount } from '../utils/format';
+import type { Album } from '../types';
 
 export default function Home() {
   const playQueue = usePlayer((s) => s.playQueue);
@@ -21,6 +25,23 @@ export default function Home() {
   const latest = catalog.slice(0, 10);
   // 推荐歌单由管理台维护，排行榜区域直接取排序靠前的三个，避免依赖旧的静态歌单 ID。
   const ranks = playlists.slice(0, 3);
+
+  /**
+   * 首页推荐位里的「热门专辑」。
+   * 拿不到就整块不渲染 —— 首页是首屏，宁可少一块也不要摆个加载失败的空壳。
+   */
+  const [hotAlbums, setHotAlbums] = useState<Album[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchAlbums({ sort: 'hot', size: 6 })
+      .then((result) => {
+        if (!cancelled) setHotAlbums(result.items);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="page home">
@@ -52,6 +73,22 @@ export default function Home() {
         </header>
         {loading ? <SongListSkeleton rows={10} /> : <SongList songs={latest} />}
       </section>
+
+      {hotAlbums.length ? (
+        <section className="section">
+          <header className="section-head">
+            <h3 className="section-title">热门专辑</h3>
+            <Link className="section-more" to="/albums">
+              全部专辑 ›
+            </Link>
+          </header>
+          <div className="album-grid">
+            {hotAlbums.map((album) => (
+              <AlbumCard key={album.id} album={album} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="section">
         <header className="section-head">

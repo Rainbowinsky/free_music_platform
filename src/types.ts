@@ -26,6 +26,8 @@ export interface Album {
   artistName: string;
   songCount: number;
   playableCount: number;
+  /** 曲目总时长（秒）；后端列表接口已返回，缺失时按 0 处理 */
+  totalDuration?: number;
 }
 
 export interface Playlist {

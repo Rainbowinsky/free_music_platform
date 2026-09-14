@@ -234,6 +234,15 @@ export const MusicNoteIcon = (p: IconProps) => (
   </Svg>
 );
 
+/** 专辑：带中心孔的唱片 */
+export const DiscIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" strokeWidth="1.8" />
+    <path d="M12 3.4a8.6 8.6 0 0 1 6.1 2.5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </Svg>
+);
+
 export const SunIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.8" />

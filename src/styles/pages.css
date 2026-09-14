@@ -336,19 +336,20 @@
   color: var(--text-4);
 }
 
-/* ---------- 专辑（歌手页的专辑网格 + 专辑详情页） ---------- */
+/* ---------- 专辑（专辑库 / 歌手页的专辑网格 / 专辑详情页） ---------- */
 .album-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 22px 16px;
+  gap: 22px 12px;
 }
 
+/* 专辑卡片：封面 + 名称 + 歌手 + 元信息，专辑库 / 歌手页 / 搜索 / 我的收藏共用同一套排版 */
 .album-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px 8px;
+  gap: 4px;
+  padding: 14px 8px 16px;
   border-radius: 12px;
   text-align: center;
   transition: background 0.16s ease, transform 0.16s ease;
@@ -357,6 +358,425 @@
 .album-card:hover {
   background: var(--bg-2);
   transform: translateY(-2px);
+}
+
+/* inline-flex 让绝对定位的按钮贴着封面，而不是贴到整个网格单元 */
+.album-card-media {
+  position: relative;
+  display: inline-flex;
+}
+
+/* 封面尺寸交给下面的网格规则统一控制，Cover 的内联宽高在网格里会被覆盖 */
+.album-card-cover {
+  display: block;
+  border-radius: 10px;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.2s ease;
+}
+
+.album-card:hover .album-card-cover {
+  box-shadow: var(--shadow-2);
+}
+
+/* 封面跟着网格列宽缩放（必须 !important 才能盖掉 Cover 的内联宽高），
+   否则窄屏 3 列时固定的 132px 会顶出格子；aspect-ratio 保证始终是正方形 */
+.album-grid .album-card-cover .cover {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+
+/* 悬停封面出现的播放按钮：一次播完整张专辑 */
+.album-card-play {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.album-card:hover .album-card-play,
+.album-card-play:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.album-card-play:not(:disabled):hover {
+  background: var(--green);
+}
+
+.album-card-play:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* 取消收藏（我的收藏页） */
+.album-card-remove {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.16s ease, background 0.16s ease;
+}
+
+.album-card:hover .album-card-remove,
+.album-card-remove:focus-visible {
+  opacity: 1;
+}
+
+.album-card-remove:hover {
+  background: var(--red);
+}
+
+.album-card-name {
+  max-width: 100%;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-card-name:hover {
+  color: var(--green);
+}
+
+.album-card-artist {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-card-artist:hover {
+  color: var(--green);
+}
+
+.album-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.album-card-kind {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--green-50);
+  /* --green-strong 在浅色下是深绿、深色下自动提亮，两种主题都有足够对比度 */
+  color: var(--green-strong);
+  font-size: 11px;
+}
+
+.album-card-duration {
+  color: var(--text-5);
+}
+
+/* ── 专辑库页：搜索 / 排序 / 按歌手筛选 ── */
+
+.album-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: -4px 0 20px;
+}
+
+.album-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 280px;
+  max-width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  transition: all 0.18s ease;
+}
+
+.album-search:focus-within {
+  background: var(--bg-3);
+  border-color: rgba(49, 194, 124, 0.5);
+  box-shadow: 0 0 0 3px rgba(49, 194, 124, 0.12);
+}
+
+.album-search-icon {
+  flex: none;
+  color: var(--text-4);
+}
+
+.album-search:focus-within .album-search-icon {
+  color: var(--green);
+}
+
+.album-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+}
+
+.album-search-input::placeholder {
+  color: var(--text-5);
+}
+
+.album-search-clear {
+  display: inline-flex;
+  padding: 4px;
+  color: var(--text-4);
+}
+
+.album-search-clear:hover {
+  color: var(--text-2);
+}
+
+/* ── 自绘下拉（专辑排序）：原生 select 的面板样式由系统接管，深色下违和且做不了展开动画 ── */
+
+.select {
+  position: relative;
+  flex: none;
+}
+
+.select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  font-size: 13px;
+  color: var(--text-2);
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.select-trigger:hover {
+  background: var(--bg-hover);
+}
+
+.select.is-open .select-trigger {
+  background: var(--bg-3);
+  border-color: rgba(49, 194, 124, 0.5);
+  box-shadow: 0 0 0 3px rgba(49, 194, 124, 0.12);
+}
+
+.select-prefix {
+  color: var(--text-4);
+}
+
+.select-value {
+  color: var(--text-1);
+  font-weight: 500;
+}
+
+.select-tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--green-50);
+  color: var(--green-strong);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.select-arrow {
+  color: var(--text-4);
+  transform: rotate(90deg);
+  transition: transform 0.2s ease, color 0.16s ease;
+}
+
+.select.is-open .select-arrow {
+  transform: rotate(-90deg);
+  color: var(--green);
+}
+
+.select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  min-width: 172px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-2);
+  box-shadow: var(--shadow-2);
+  /* 面板常驻 DOM，用透明度 + 位移做过渡，展开与收起两个方向都有动画；
+     关闭后 visibility 置为 hidden（延迟到动画结束），不会残留进可访问树 */
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: top left;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    visibility 0s linear 0.18s;
+}
+
+.select.is-open .select-menu {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: left;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.select-option:not(:disabled):hover {
+  background: var(--bg-hover);
+}
+
+.select-option.is-active {
+  color: var(--green-strong);
+  background: var(--green-50);
+  font-weight: 500;
+}
+
+.select-option-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.select-check {
+  flex: none;
+  color: var(--green);
+}
+
+/* 当前生效的歌手筛选（从歌手页带参数跳过来时出现），点击可取消 */
+.album-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--green-50);
+  color: var(--green-strong);
+  font-size: 12px;
+  transition: opacity 0.16s ease;
+}
+
+.album-filter-tag:hover {
+  opacity: 0.82;
+}
+
+/* 专辑卡片错峰入场：新内容到达时整组卡片依次淡入上浮，
+   直接替换是「页面跳一下」的主要成因 */
+.album-anim {
+  animation: album-card-in 0.32s ease backwards;
+}
+
+@keyframes album-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 换条件但旧内容还在时的「刷新中」：压暗 + 禁止点击，代替骨架屏整块替换 */
+.album-grid {
+  transition: opacity 0.2s ease;
+}
+
+.album-grid.is-refreshing {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .album-anim {
+    animation: none;
+  }
+
+  .select-menu,
+  .select-arrow,
+  .album-grid {
+    transition: none;
+  }
+}
+
+.album-reset {
+  font-size: 13px;
+}
+
+.album-more {
+  display: flex;
+  justify-content: center;
+  padding: 26px 0 6px;
+}
+
+/* ── 专辑详情页 ── */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.breadcrumb a:hover {
+  color: var(--green);
+}
+
+.breadcrumb-sep {
+  color: var(--text-5);
+}
+
+.breadcrumb-current {
+  color: var(--text-2);
+}
+
+.album-hint {
+  color: var(--text-5);
 }
 
 /* 专辑页里可点回歌手的名字 */
@@ -596,6 +1016,20 @@
   .col-album,
   .col-artist {
     display: none;
+  }
+
+  /* 专辑库的筛选条在窄屏改成两行：搜索框独占一行 */
+  .album-search {
+    width: 100%;
+  }
+
+  .album-toolbar {
+    gap: 10px;
+  }
+
+  /* 下拉面板在窄屏下贴着按钮左缘，防止超出视口 */
+  .select-menu {
+    max-width: calc(100vw - 48px);
   }
 }
 

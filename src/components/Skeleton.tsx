@@ -71,6 +71,21 @@ export function ArtistGridSkeleton({ count = 12 }: { count?: number }) {
   );
 }
 
+/** 专辑网格骨架（与 AlbumCard 的排版同构：正方形封面 + 两行文字） */
+export function AlbumGridSkeleton({ count = 12 }: { count?: number }) {
+  return (
+    <div className="album-grid skeleton" aria-hidden="true">
+      {Array.from({ length: count }, (_, i) => (
+        <div className="album-card skeleton-card" key={i}>
+          <span className="sk sk-square" />
+          <span className="sk sk-line" style={{ width: `${58 + ((i * 11) % 26)}%` }} />
+          <span className="sk sk-line sk-sm" style={{ width: `${34 + ((i * 7) % 20)}%` }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** 歌单网格骨架 */
 export function PlaylistGridSkeleton({ count = 5 }: { count?: number }) {
   return (

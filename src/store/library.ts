@@ -14,6 +14,8 @@ interface LibraryState {
   error: string;
   liked: string[];
   collected: string[];
+  /** 收藏的专辑 id（albums.id 的字符串形式） */
+  collectedAlbums: string[];
   recent: string[];
   /** 我创建的歌单 */
   playlists: UserPlaylist[];
@@ -24,6 +26,8 @@ interface LibraryState {
   loadFor: (username: string | null) => Promise<void>;
   toggleLike: (songId: string) => Promise<void>;
   toggleCollect: (playlistId: string) => Promise<void>;
+  /** 收藏 / 取消收藏专辑，与收藏歌单同样是乐观更新 + 失败回滚 */
+  toggleCollectAlbum: (albumId: string) => Promise<void>;
   addRecent: (songId: string) => Promise<void>;
   clearRecent: () => Promise<void>;
   /**
@@ -69,25 +73,44 @@ export const useLibrary = create<LibraryState>((set, get) => {
     error: '',
     liked: [],
     collected: [],
+    collectedAlbums: [],
     recent: store.getGuestRecent(),
     playlists: [],
 
     loadFor: async (username) => {
       if (!username) {
         // 未登录时「最近播放」按设备保留在本地，其余数据清空
-        set({ username: null, liked: [], collected: [], recent: store.getGuestRecent(), playlists: [], error: '', loading: false });
+        set({
+          username: null,
+          liked: [],
+          collected: [],
+          collectedAlbums: [],
+          recent: store.getGuestRecent(),
+          playlists: [],
+          error: '',
+          loading: false,
+        });
         return;
       }
 
       const token = store.getToken();
       if (!token) {
         // 有账号名但没有 token（异常状态）：按未登录处理，避免误以为数据丢了
-        set({ username, liked: [], collected: [], recent: [], playlists: [], loading: false });
+        set({ username, liked: [], collected: [], collectedAlbums: [], recent: [], playlists: [], loading: false });
         return;
       }
 
       // 先清空旧账号的数据，避免切换账号时短暂看到上一个人的内容
-      set({ username, loading: true, error: '', liked: [], collected: [], recent: [], playlists: [] });
+      set({
+        username,
+        loading: true,
+        error: '',
+        liked: [],
+        collected: [],
+        collectedAlbums: [],
+        recent: [],
+        playlists: [],
+      });
 
       try {
         const data = await meApi.library(token);
@@ -96,6 +119,7 @@ export const useLibrary = create<LibraryState>((set, get) => {
         set({
           liked: data.liked,
           collected: data.collected,
+          collectedAlbums: data.collectedAlbums,
           recent: data.recent,
           playlists: data.playlists,
           loading: false,
@@ -155,6 +179,31 @@ export const useLibrary = create<LibraryState>((set, get) => {
         set({ collected: aligned, error: '' });
       } catch (error) {
         set({ collected, error: describe(error) });
+      }
+    },
+
+    toggleCollectAlbum: async (albumId) => {
+      const token = guard();
+      const { collectedAlbums } = get();
+      const next = collectedAlbums.includes(albumId)
+        ? collectedAlbums.filter((id) => id !== albumId)
+        : [albumId, ...collectedAlbums];
+
+      if (!token) {
+        set({ collectedAlbums: next });
+        return;
+      }
+
+      set({ collectedAlbums: next });
+      try {
+        const result = await meApi.toggleCollectAlbum(token, albumId);
+        const current = get().collectedAlbums;
+        const aligned = result.collected
+          ? [albumId, ...current.filter((id) => id !== albumId)]
+          : current.filter((id) => id !== albumId);
+        set({ collectedAlbums: aligned, error: '' });
+      } catch (error) {
+        set({ collectedAlbums, error: describe(error) });
       }
     },
 
