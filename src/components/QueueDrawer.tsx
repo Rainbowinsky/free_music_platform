@@ -5,6 +5,7 @@ import { CloseIcon, DragHandleIcon, TrashIcon } from './Icons';
 import { usePlayer } from '../store/player';
 import { useUi } from '../store/ui';
 import { activeLyricIndex } from '../utils/lrc';
+import { primaryArtist } from '../utils/artist';
 import { useLyrics } from '../hooks/useLyrics';
 import { formatTime } from '../utils/format';
 
@@ -149,7 +150,7 @@ export default function QueueDrawer() {
                     <Cover src={song.cover} name={song.name} size={38} radius={6} />
                   </button>
                   <div className="queue-info">
-                    <Link className="queue-name" to={`/artist/${encodeURIComponent(song.artist.split('/')[0])}`}>
+                    <Link className="queue-name" to={`/artist/${encodeURIComponent(primaryArtist(song.artist))}`}>
                       {song.name}
                     </Link>
                     <span className="queue-artist">{song.artist}</span>

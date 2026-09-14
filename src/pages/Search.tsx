@@ -6,9 +6,10 @@ import PlaylistCard from '../components/PlaylistCard';
 import Empty from '../components/Empty';
 import { SongListSkeleton, ArtistGridSkeleton } from '../components/Skeleton';
 import { SONGS as STATIC_SONGS } from '../data/songs';
-import { PLAYLISTS } from '../data/playlists';
 import { useCatalogLoading, useSongs } from '../store/catalog';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
 import { store } from '../lib/db';
+import { primaryArtist } from '../utils/artist';
 import { SearchIcon } from '../components/Icons';
 
 type Tab = 'song' | 'playlist' | 'artist';
@@ -22,6 +23,8 @@ export default function Search() {
   const [history, setHistory] = useState<string[]>(() => store.getSearchHistory());
   const songsInLibrary = useSongs();
   const loading = useCatalogLoading();
+  // 歌单与首页 / 我的收藏共用同一数据源（DB 优先），否则管理台新建的歌单搜不到
+  const featuredPlaylists = useFeaturedPlaylistItems();
   // 曲库还没加载完时先用静态数据兜底，避免首屏搜索为空
   const catalog = songsInLibrary.length ? songsInLibrary : STATIC_SONGS;
 
@@ -41,25 +44,30 @@ export default function Search() {
     () =>
       !lower
         ? []
-        : PLAYLISTS.filter((playlist) =>
+        : featuredPlaylists.filter((playlist) =>
             [playlist.title, playlist.creator, playlist.tags.join('')].some((field) =>
               field.toLowerCase().includes(lower),
             ),
           ),
-    [lower],
+    [lower, featuredPlaylists],
   );
 
+  /**
+   * 歌手维度按「主歌手」聚合。
+   * 用完整歌手串（如「周杰伦/阿信」）当歌手名会生成一个不存在的歌手页，
+   * 点进去是空的；按主歌手聚合才能保证每张卡片都有内容。
+   */
   const artists = useMemo(() => {
     if (!lower) return [];
     const map = new Map<string, { name: string; cover: string; count: number }>();
     for (const song of catalog) {
-      if (!song.artist.toLowerCase().includes(lower)) continue;
-      const name = song.artist;
+      const name = primaryArtist(song.artist);
+      if (!name.toLowerCase().includes(lower)) continue;
       const exist = map.get(name);
       if (exist) exist.count += 1;
       else map.set(name, { name, cover: song.cover, count: 1 });
     }
-    return [...map.values()];
+    return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
   }, [lower, catalog]);
 
   const hasResult = songs.length + playlists.length + artists.length > 0;

@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router-dom';
-import { PLAYLISTS } from '../data/playlists';
+import type { Playlist } from '../types';
 import { useSongMap } from '../store/catalog';
+import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
+import { PLAYLIST_MAP } from '../data/playlists';
 import { useAuth } from '../store/auth';
 import { useLibrary } from '../store/library';
 import { useUi } from '../store/ui';
@@ -44,7 +46,15 @@ export default function Sidebar() {
   const openPlaylistModal = useUi((s) => s.openPlaylistModal);
   const guard = useRequireLogin();
   const songMap = useSongMap();
-  const collectedPlaylists = PLAYLISTS.filter((p) => collected.includes(p.id));
+  /**
+   * 收藏的歌单必须与首页 / 我的收藏读同一个数据源（DB 优先，空库回退内置示例）。
+   * 另外按收藏顺序逐个解析 id：万一某个 id 只存在于内置示例里（例如升级前就收藏过），
+   * 也能靠 PLAYLIST_MAP 兜底显示，不会出现「收藏了却查不到」。
+   */
+  const featuredPlaylists = useFeaturedPlaylistItems();
+  const collectedPlaylists = collected
+    .map((id): Playlist | undefined => featuredPlaylists.find((p) => p.id === id) ?? PLAYLIST_MAP[id])
+    .filter((playlist): playlist is Playlist => Boolean(playlist));
 
   return (
     <aside className="sidebar">

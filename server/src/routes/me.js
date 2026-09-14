@@ -8,6 +8,7 @@
  * song_id 用前端 Song.id（来源侧 ID 字符串），理由见 db.js 的注释。
  */
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 
 import { query, queryOne } from '../db.js';
 import { authRequired } from '../auth.js';
@@ -18,6 +19,9 @@ router.use(authRequired);
 const RECENT_LIMIT = 100;
 const TITLE_LIMIT = 30;
 const DESC_LIMIT = 200;
+/** 批量移除时一次最多处理这么多首，避免超长 IN 子句 */
+const BULK_LIMIT = 500;
+const PASSWORD_MIN = 6;
 
 const uid = (req) => Number(req.auth.sub);
 
@@ -282,6 +286,36 @@ router.get('/stats', async (req, res) => {
   });
 });
 
+/* ─────────────── 账号自助（改自己的密码） ─────────────── */
+
+/**
+ * 修改自己的密码。
+ *
+ * 只处理「已登录 + 知道旧密码」这一条路径，刻意不做邮箱/手机找回：
+ * 那需要引入 SMTP 之类的外部依赖，与「本地曲库演示项目」的定位不符。
+ * 管理员重置他人密码仍走 /api/admin/users/:id/password（有超管护栏）。
+ */
+router.post('/password', async (req, res) => {
+  const userId = uid(req);
+  const oldPassword = String(req.body?.oldPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+
+  if (!oldPassword) return res.status(400).json({ error: '请输入当前密码' });
+  if (newPassword.length < PASSWORD_MIN) return res.status(400).json({ error: `新密码长度不能少于 ${PASSWORD_MIN} 位` });
+  if (oldPassword === newPassword) return res.status(400).json({ error: '新密码不能与当前密码相同' });
+
+  const row = await queryOne('SELECT password_hash FROM users WHERE id = ?', [userId]);
+  if (!row) return res.status(404).json({ error: '账号不存在' });
+
+  const ok = await bcrypt.compare(oldPassword, row.password_hash);
+  if (!ok) return res.status(401).json({ error: '当前密码不正确' });
+
+  const hash = await bcrypt.hash(newPassword, 10);
+  await query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+  // 旧 JWT 仍在有效期内也能继续用（改密码不代表踢下线），这里只返回结果
+  return res.json({ ok: true });
+});
+
 /* ─────────────── 自建歌单 ─────────────── */
 
 /** 校验歌单归属，返回该行或 null */
@@ -374,6 +408,30 @@ router.delete('/playlists/:id/songs/:songId', async (req, res) => {
   await query('DELETE FROM user_playlist_songs WHERE playlist_id = ? AND song_id = ?', [target.id, req.params.songId]);
   await query('UPDATE user_playlists SET updated_at = NOW() WHERE id = ?', [target.id]);
   return res.json({ ok: true });
+});
+
+/**
+ * 批量从歌单移除歌曲（多选删除）。
+ *
+ * 用 POST 而不是 DELETE：DELETE 带 body 在部分反向代理下会被丢掉，
+ * 而这里要传一个数组，走 body 最自然。返回 removed 让前端能核对实际删掉几首。
+ */
+router.post('/playlists/:id/songs/remove', async (req, res) => {
+  const userId = uid(req);
+  const target = await ownPlaylist(userId, req.params.id);
+  if (!target) return res.status(404).json({ error: '歌单不存在' });
+
+  const raw = Array.isArray(req.body?.songIds) ? req.body.songIds : [];
+  const songIds = [...new Set(raw.map((id) => String(id)).filter(Boolean))].slice(0, BULK_LIMIT);
+  if (!songIds.length) return res.status(400).json({ error: '请选择要移除的歌曲' });
+
+  const marks = songIds.map(() => '?').join(', ');
+  const result = await query(
+    `DELETE FROM user_playlist_songs WHERE playlist_id = ? AND song_id IN (${marks})`,
+    [target.id, ...songIds],
+  );
+  await query('UPDATE user_playlists SET updated_at = NOW() WHERE id = ?', [target.id]);
+  return res.json({ ok: true, removed: result.affectedRows || 0 });
 });
 
 export default router;

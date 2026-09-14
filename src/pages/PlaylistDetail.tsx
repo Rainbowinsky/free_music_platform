@@ -13,7 +13,10 @@ import { useLibrary } from '../store/library';
 import { useUi } from '../store/ui';
 import { useRequireLogin } from '../hooks/useRequireLogin';
 import { formatCount } from '../utils/format';
-import { HeartFilledIcon, HeartIcon, PlayIcon } from '../components/Icons';
+import { CloseIcon, HeartFilledIcon, HeartIcon, PlayIcon, SearchIcon } from '../components/Icons';
+
+/** 超过这个数量才值得提供页内搜索 */
+const FILTER_THRESHOLD = 8;
 
 export default function PlaylistDetail() {
   const { id = '' } = useParams();
@@ -25,12 +28,15 @@ export default function PlaylistDetail() {
   const user = useAuth((s) => s.user);
   const collected = useLibrary((s) => s.collected);
   const toggleCollect = useLibrary((s) => s.toggleCollect);
-  const removeSong = useLibrary((s) => s.removeSongFromPlaylist);
+  const removeSongs = useLibrary((s) => s.removeSongsFromPlaylist);
   const openPlaylistModal = useUi((s) => s.openPlaylistModal);
   const toast = useUi((s) => s.toast);
   const guard = useRequireLogin();
   const songMap = useSongMap();
   const [sort, setSort] = useState<SongSort>(DEFAULT_SONG_SORT);
+  const [filter, setFilter] = useState('');
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
 
   const baseSongs = useMemo(() => {
     if (userPlaylist) {
@@ -40,7 +46,17 @@ export default function PlaylistDetail() {
     }
     return staticPlaylist ? playlistSongs(staticPlaylist, songMap) : [];
   }, [userPlaylist, staticPlaylist, songMap]);
-  const songs = useMemo(() => sortSongs(baseSongs, sort), [baseSongs, sort]);
+
+  /** 页内搜索 + 排序：先按关键词过滤，再按用户选的维度排序 */
+  const songs = useMemo(() => {
+    const keyword = filter.trim().toLowerCase();
+    const matched = keyword
+      ? baseSongs.filter((song) =>
+          [song.name, song.artist, song.album].some((field) => field.toLowerCase().includes(keyword)),
+        )
+      : baseSongs;
+    return sortSongs(matched, sort);
+  }, [baseSongs, filter, sort]);
 
   if (!userPlaylist && !staticPlaylist) {
     return (
@@ -65,6 +81,29 @@ export default function PlaylistDetail() {
   const tags = userPlaylist ? ['我创建的'] : staticPlaylist!.tags;
   const isCollected = staticPlaylist ? collected.includes(staticPlaylist.id) : false;
 
+  const toggleSelect = (songId: string) => {
+    setSelected((prev) => (prev.includes(songId) ? prev.filter((item) => item !== songId) : [...prev, songId]));
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelected([]);
+  };
+
+  /** 批量移除所选：失败时 store 会回滚，选中态保留让用户能直接重试 */
+  const handleBatchRemove = async () => {
+    if (!selected.length) return;
+    const count = selected.length;
+    await removeSongs(id, selected);
+    const failure = useLibrary.getState().error;
+    if (failure) {
+      toast(failure);
+      return;
+    }
+    toast(`已从「${title}」移除 ${count} 首`);
+    exitSelectMode();
+  };
+
   return (
     <div className="page playlist-detail">
       <header className="detail-head">
@@ -85,7 +124,7 @@ export default function PlaylistDetail() {
             ))}
             <span className="detail-stat">
               {staticPlaylist ? `播放 ${formatCount(staticPlaylist.playCount)} · ` : ''}
-              共 {songs.length} 首
+              共 {baseSongs.length} 首
             </span>
           </p>
           <div className="detail-actions">
@@ -96,11 +135,7 @@ export default function PlaylistDetail() {
 
             {isOwn ? (
               <>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => openPlaylistModal('edit', id)}
-                >
+                <button type="button" className="btn btn-outline" onClick={() => openPlaylistModal('edit', id)}>
                   编辑歌单
                 </button>
                 <Link className="btn btn-outline" to="/">
@@ -125,14 +160,78 @@ export default function PlaylistDetail() {
         <header className="section-head">
           <h3 className="section-title">歌曲列表</h3>
           <div className="section-tools">
-            {songs.length > 1 ? <SongSortBar value={sort} onChange={setSort} /> : null}
+            {baseSongs.length > FILTER_THRESHOLD ? (
+              <span className="list-filter">
+                <SearchIcon size={14} className="list-filter-icon" />
+                <input
+                  value={filter}
+                  placeholder="在歌单内搜索"
+                  aria-label="在歌单内搜索"
+                  onChange={(event) => setFilter(event.target.value)}
+                />
+                {filter ? (
+                  <button
+                    type="button"
+                    className="list-filter-clear"
+                    aria-label="清空搜索"
+                    onClick={() => setFilter('')}
+                  >
+                    <CloseIcon size={12} />
+                  </button>
+                ) : null}
+              </span>
+            ) : null}
+            {songs.length > 1 || filter ? <SongSortBar value={sort} onChange={setSort} /> : null}
+            {isOwn && baseSongs.length ? (
+              <button
+                type="button"
+                className={`btn btn-outline btn-sm ${selectMode ? 'is-collected' : ''}`}
+                onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              >
+                {selectMode ? '完成' : '多选'}
+              </button>
+            ) : null}
             <span className="section-sub">
-              {songs.length} 首歌{isOwn ? ' · 悬停歌曲可移除' : ''}
+              {filter
+                ? `筛出 ${songs.length} / ${baseSongs.length} 首`
+                : `${songs.length} 首歌${isOwn && !selectMode ? ' · 悬停歌曲可移除' : ''}`}
             </span>
           </div>
         </header>
 
-        {isOwn && !songs.length ? (
+        {selectMode ? (
+          <div className="batch-bar">
+            <span className="batch-count">
+              已选 <strong>{selected.length}</strong> 首
+            </span>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => setSelected(songs.map((song) => song.id))}
+            >
+              全选本页
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={!selected.length}
+              onClick={() => setSelected([])}
+            >
+              取消选择
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger-outline btn-sm"
+              disabled={!selected.length}
+              onClick={() => void handleBatchRemove()}
+            >
+              移除所选
+            </button>
+            <span className="batch-hint">多选模式下单击整行即可勾选</span>
+          </div>
+        ) : null}
+
+        {isOwn && !baseSongs.length ? (
           <Empty
             title="这个歌单还是空的"
             desc="去首页或任意歌单，点击歌曲右侧的 + 就能加进来"
@@ -142,20 +241,26 @@ export default function PlaylistDetail() {
               </Link>
             }
           />
-        ) : (
+        ) : songs.length ? (
           <SongList
             songs={songs}
             context={songs}
+            selectable={selectMode}
+            selectedIds={selected}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={(checked) => setSelected(checked ? songs.map((song) => song.id) : [])}
             onRemoveSong={
-              isOwn
+              isOwn && !selectMode
                 ? async (song) => {
-                    await removeSong(id, song.id);
+                    await removeSongs(id, [song.id]);
                     const failure = useLibrary.getState().error;
                     toast(failure || `已从「${title}」移除《${song.name}》`);
                   }
                 : undefined
             }
           />
+        ) : (
+          <Empty title={`歌单里没有匹配「${filter.trim()}」的歌曲`} desc="换个关键词，或清空搜索条件" />
         )}
       </section>
     </div>

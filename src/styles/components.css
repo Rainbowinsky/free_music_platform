@@ -256,6 +256,48 @@
   height: 52px;
 }
 
+/* ---------- 多选模式（歌单批量管理） ---------- */
+.col-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.song-check {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+
+/* 行首多出 34px 的复选列；带/不带专辑两套列宽都要跟着挪 */
+.songlist.is-selectable .songlist-head,
+.songlist.is-selectable .song-row {
+  grid-template-columns: 34px 62px minmax(180px, 3.2fr) minmax(110px, 1.5fr) minmax(110px, 1.5fr) 128px;
+}
+
+.songlist.is-selectable.no-album .songlist-head,
+.songlist.is-selectable.no-album .song-row {
+  grid-template-columns: 34px 62px minmax(180px, 3.4fr) minmax(110px, 1.8fr) 128px;
+}
+
+.songlist.is-selectable .song-row {
+  cursor: pointer;
+}
+
+.song-row.is-selected {
+  background: var(--green-50);
+}
+
+.song-row.is-selected .song-name {
+  color: var(--green);
+}
+
+/* 列表里的专辑名可点进专辑页 */
+.song-album:hover {
+  color: var(--green);
+}
+
 /* ---------- 歌单卡片 ---------- */
 .playlist-grid {
   display: grid;
@@ -1048,6 +1090,43 @@
   border-color: var(--red);
 }
 
+/* ---------- 账号设置弹窗 ---------- */
+.account-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 16px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.account-key {
+  flex: none;
+  width: 62px;
+  color: var(--text-4);
+}
+
+.account-val {
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-section {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
 .add-list {
   max-height: 264px;
   overflow-y: auto;
@@ -1256,6 +1335,81 @@
   justify-content: flex-end;
 }
 
+/* ── 页内搜索（歌单等长列表） ── */
+
+.list-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid transparent;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.list-filter:focus-within {
+  background: var(--bg-3);
+  border-color: var(--green);
+}
+
+.list-filter-icon {
+  flex: none;
+  color: var(--text-4);
+}
+
+.list-filter input {
+  width: 116px;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 12.5px;
+}
+
+.list-filter input::placeholder {
+  color: var(--text-5);
+}
+
+.list-filter-clear {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-4);
+}
+
+.list-filter-clear:hover {
+  color: var(--text-1);
+}
+
+/* ── 批量操作条（多选时出现在列表上方） ── */
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--green-50);
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.batch-count strong {
+  font-weight: 600;
+  color: var(--green-strong);
+}
+
+.batch-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-4);
+}
+
 /* ── 列表排序工具条 ── */
 
 .sortbar {
@@ -1293,4 +1447,98 @@
 .sortbar-arrow {
   font-size: 11px;
   line-height: 1;
+}
+
+/* ── 音效面板（均衡器 / 倍速）── */
+
+.fx {
+  position: relative;
+  display: inline-flex;
+}
+
+.fx-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  z-index: 70;
+  width: 268px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: sug-in 0.14s ease;
+}
+
+.fx-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fx-label {
+  font-size: 12px;
+  color: var(--text-4);
+}
+
+.fx-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fx-chip {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--bg-2);
+  transition: all 0.15s ease;
+}
+
+.fx-chip:hover {
+  color: var(--text-1);
+  background: var(--bg-hover);
+}
+
+.fx-chip.is-active {
+  color: #fff;
+  background: var(--green);
+  font-weight: 500;
+}
+
+.fx-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fx-band {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.fx-band-name,
+.fx-band-val {
+  font-size: 11px;
+  color: var(--text-4);
+}
+
+.fx-band-val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fx-band input[type='range'] {
+  width: 100%;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--green);
+  cursor: pointer;
 }

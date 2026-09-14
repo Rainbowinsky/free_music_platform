@@ -1,6 +1,8 @@
 import PlaylistCard from '../components/PlaylistCard';
 import Empty from '../components/Empty';
+import type { Playlist } from '../types';
 import { useFeaturedPlaylistItems } from '../store/featuredPlaylists';
+import { PLAYLIST_MAP } from '../data/playlists';
 import { useAuth } from '../store/auth';
 import { useLibrary } from '../store/library';
 
@@ -10,7 +12,10 @@ export default function Collection() {
   const collected = useLibrary((s) => s.collected);
   const toggleCollect = useLibrary((s) => s.toggleCollect);
   const featured = useFeaturedPlaylistItems();
-  const playlists = featured.filter((playlist) => collected.includes(playlist.id));
+  // 与首页/侧边栏同一数据源；id 在内置示例里也查一遍，避免历史收藏被漏掉
+  const playlists = collected
+    .map((id): Playlist | undefined => featured.find((p) => p.id === id) ?? PLAYLIST_MAP[id])
+    .filter((playlist): playlist is Playlist => Boolean(playlist));
 
   if (!user) {
     return (

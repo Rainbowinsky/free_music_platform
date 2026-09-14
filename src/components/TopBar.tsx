@@ -14,7 +14,6 @@ import {
   CheckIcon,
   CloseIcon,
   MoonIcon,
-  MusicNoteIcon,
   SearchIcon,
   SettingsIcon,
   SunIcon,
@@ -62,6 +61,7 @@ export default function TopBar() {
   const allSongs = useSongs();
   const playSong = usePlayer((s) => s.playSong);
   const toast = useUi((s) => s.toast);
+  const openAccount = useUi((s) => s.openAccount);
   const [keyword, setKeyword] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
@@ -169,10 +169,10 @@ export default function TopBar() {
       <div className="topbar-inner">
         <Link to="/" className="logo">
           <span className="logo-mark">
-            <MusicNoteIcon size={18} />
+            <img src="/icon/c55fbb69-0ae0-4659-9de3-6111144698a7.png" alt="" />
           </span>
           <span className="logo-text">
-            <strong>QQ音乐</strong>
+            <strong>Free音乐</strong>
             <em>听我想听</em>
           </span>
         </Link>
@@ -335,6 +335,17 @@ export default function TopBar() {
                     曲库管理台
                     {canAdmin ? <em className="user-menu-role">{adminUser ? '已登录' : '可进入'}</em> : null}
                   </Link>
+                  <button
+                    type="button"
+                    className="user-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      openAccount();
+                    }}
+                  >
+                    <UserIcon size={15} />
+                    账号设置
+                  </button>
                   <button
                     type="button"
                     className="user-menu-item is-danger"

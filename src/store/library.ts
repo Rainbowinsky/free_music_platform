@@ -36,6 +36,8 @@ interface LibraryState {
   deletePlaylist: (playlistId: string) => Promise<void>;
   addSongToPlaylist: (playlistId: string, songId: string) => Promise<boolean>;
   removeSongFromPlaylist: (playlistId: string, songId: string) => Promise<void>;
+  /** 批量移出（多选删除）；单首移除也走它，避免两份乐观更新逻辑 */
+  removeSongsFromPlaylist: (playlistId: string, songIds: string[]) => Promise<void>;
 }
 
 /** 把错误转成一句能给用户看的话 */
@@ -292,19 +294,27 @@ export const useLibrary = create<LibraryState>((set, get) => {
     },
 
     removeSongFromPlaylist: async (playlistId, songId) => {
+      // 单首移除复用批量逻辑，两边保持同一份乐观更新与回滚
+      await get().removeSongsFromPlaylist(playlistId, [songId]);
+    },
+
+    removeSongsFromPlaylist: async (playlistId, songIds) => {
+      const removing = new Set(songIds.filter(Boolean));
+      if (!removing.size) return;
+
       const token = guard();
       const previous = get().playlists;
       set({
         playlists: previous.map((playlist) =>
           playlist.id === playlistId
-            ? { ...playlist, songIds: playlist.songIds.filter((id) => id !== songId), updatedAt: Date.now() }
+            ? { ...playlist, songIds: playlist.songIds.filter((id) => !removing.has(id)), updatedAt: Date.now() }
             : playlist,
         ),
       });
       if (!token) return;
 
       try {
-        await meApi.removeSongFromPlaylist(token, playlistId, songId);
+        await meApi.removeSongsFromPlaylist(token, playlistId, [...removing]);
         set({ error: '' });
       } catch (error) {
         set({ playlists: previous, error: describe(error) });

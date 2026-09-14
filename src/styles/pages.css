@@ -336,6 +336,34 @@
   color: var(--text-4);
 }
 
+/* ---------- 专辑（歌手页的专辑网格 + 专辑详情页） ---------- */
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 22px 16px;
+}
+
+.album-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 8px;
+  border-radius: 12px;
+  text-align: center;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.album-card:hover {
+  background: var(--bg-2);
+  transform: translateY(-2px);
+}
+
+/* 专辑页里可点回歌手的名字 */
+.detail-artist-link:hover {
+  color: var(--green);
+}
+
 .artist-head-cover {
   border-radius: 50%;
 }
@@ -480,6 +508,10 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .album-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .rank-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -531,6 +563,10 @@
   }
 
   .artist-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .album-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

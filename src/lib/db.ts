@@ -324,6 +324,22 @@ export const meApi = {
     );
   },
 
+  /** 批量从歌单移除（多选删除）；返回实际删掉的条数 */
+  async removeSongsFromPlaylist(token: string, playlistId: string, songIds: string[]): Promise<{ removed: number }> {
+    return callMe<{ removed: number }>(`/api/me/playlists/${encodeURIComponent(playlistId)}/songs/remove`, token, {
+      method: 'POST',
+      body: { songIds },
+    });
+  },
+
+  /**
+   * 修改自己的密码。
+   * 只走「已登录 + 知道旧密码」这一条路径；邮件找回需要 SMTP，与项目定位不符。
+   */
+  async changePassword(token: string, oldPassword: string, newPassword: string): Promise<void> {
+    await callMe('/api/me/password', token, { method: 'POST', body: { oldPassword, newPassword } });
+  },
+
   /** 上报一次播放（前端累计听够阈值后才调用，避免快速切歌把统计刷高） */
   async recordPlay(
     token: string,
@@ -337,7 +353,6 @@ export const meApi = {
     return callMe<PlayStats>(`/api/me/stats?days=${days}`, token);
   },
 };
-
 /** 听歌统计的返回结构（与后端 /api/me/stats 对齐） */
 export interface PlayStats {
   overview: {

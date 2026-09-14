@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { query, queryOne } from '../db.js';
 import { adminRequired } from '../auth.js';
+import { artistKey } from '../music/normalize.js';
 
 const router = Router();
 
@@ -11,6 +12,8 @@ const mapSong = (row) => ({
   artist: row.artist_name || row.artist_text,
   artistText: row.artist_text,
   album: row.album_name || '',
+  // 专辑主键：前端据此把列表里的专辑名做成可跳转的链接
+  albumId: row.album_id ?? null,
   duration: row.duration,
   src: row.src,
   cover: row.cover || row.album_cover || '',
@@ -137,11 +140,26 @@ router.get('/artists', async (_req, res) => {
   });
 });
 
-/** 某歌手下的专辑与歌曲 */
+/**
+ * 某歌手下的专辑与歌曲。
+ *
+ * `:id` 既接受数字主键，也接受歌手名 —— 主站的歌手页链接用的是名字
+ * （`/artist/:name`，因为列表数据里只有歌手名，没有 id），这里统一收口，
+ * 免得前端为了拿 id 先去全量拉一遍歌手列表。
+ * 名字会先用 artistKey 归一化后按 name_key 兜底匹配，兼容括注、空格与繁简差异。
+ */
 router.get('/artists/:id', async (req, res) => {
-  const artist = await queryOne('SELECT id, name, cover FROM artists WHERE id = ?', [req.params.id]);
+  const raw = String(req.params.id || '').trim();
+  if (!raw) return res.status(400).json({ error: '缺少歌手标识' });
+
+  const artist = /^\d+$/.test(raw)
+    ? await queryOne('SELECT id, name, cover FROM artists WHERE id = ?', [Number(raw)])
+    : await queryOne('SELECT id, name, cover FROM artists WHERE name = ? OR name_key = ?', [raw, artistKey(raw)]);
   if (!artist) return res.status(404).json({ error: '歌手不存在' });
-  const albums = await query('SELECT id, name, cover, year FROM albums WHERE artist_id = ? ORDER BY id', [artist.id]);
+
+  const albums = await query('SELECT id, name, cover, year FROM albums WHERE artist_id = ? ORDER BY year DESC, id', [
+    artist.id,
+  ]);
   const songs = await query(
     `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
        FROM songs s
@@ -154,6 +172,81 @@ router.get('/artists/:id', async (req, res) => {
   return res.json({
     artist,
     albums: albums.map((a) => ({ id: a.id, name: a.name, cover: a.cover, year: a.year })),
+    songs: songs.map(mapSong),
+  });
+});
+
+/**
+ * 专辑列表（公开读）。
+ *
+ * 专辑信息本来就由管理台维护（`/api/admin/albums`），主站此前没有任何公开读接口，
+ * 导致管理台整理好的封面与年份在主站完全看不到。
+ * cover 为空时回退到该专辑任一歌曲的封面（与 /artists 同样的理由，避免整页退化成占位图）。
+ */
+router.get('/albums', async (req, res) => {
+  const keyword = String(req.query.keyword || '').trim();
+  const where = keyword ? 'WHERE al.name LIKE ? OR ar.name LIKE ?' : '';
+  const params = keyword ? [`%${keyword}%`, `%${keyword}%`] : [];
+
+  const rows = await query(
+    `SELECT al.id, al.name, al.year, al.artist_id,
+            MAX(ar.name) AS artist_name,
+            COALESCE(NULLIF(al.cover, ''), MAX(s.cover)) AS cover,
+            COUNT(s.id) AS song_count,
+            SUM(CASE WHEN s.playable = 1 THEN 1 ELSE 0 END) AS playable_count
+       FROM albums al
+       LEFT JOIN artists ar ON ar.id = al.artist_id
+       LEFT JOIN songs s ON s.album_id = al.id
+       ${where}
+      GROUP BY al.id
+      ORDER BY al.year DESC, al.name ASC`,
+    params,
+  );
+
+  res.json({
+    items: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      cover: r.cover || '',
+      year: r.year || '',
+      artistId: r.artist_id ?? null,
+      artistName: r.artist_name || '',
+      songCount: Number(r.song_count),
+      playableCount: Number(r.playable_count || 0),
+    })),
+  });
+});
+
+/** 单个专辑详情（含全部曲目），供新增的专辑页使用 */
+router.get('/albums/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: '专辑 ID 不合法' });
+
+  const album = await queryOne(
+    `SELECT al.*, ar.name AS artist_name FROM albums al LEFT JOIN artists ar ON ar.id = al.artist_id WHERE al.id = ?`,
+    [id],
+  );
+  if (!album) return res.status(404).json({ error: '专辑不存在' });
+
+  const songs = await query(
+    `SELECT s.*, ar.name AS artist_name, al.name AS album_name, al.cover AS album_cover
+       FROM songs s
+       LEFT JOIN artists ar ON ar.id = s.artist_id
+       LEFT JOIN albums al ON al.id = s.album_id
+      WHERE s.album_id = ?
+      ORDER BY s.id`,
+    [album.id],
+  );
+
+  return res.json({
+    album: {
+      id: album.id,
+      name: album.name,
+      cover: album.cover || songs[0]?.cover || '',
+      year: album.year || '',
+      artistId: album.artist_id ?? null,
+      artistName: album.artist_name || '',
+    },
     songs: songs.map(mapSong),
   });
 });

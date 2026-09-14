@@ -3,6 +3,8 @@ export interface Song {
   name: string;
   artist: string;
   album: string;
+  /** 专辑主键（后端 albums.id）；静态兜底曲库没有这个字段，因此专辑链接受其是否为数字控制 */
+  albumId?: number | null;
   cover: string;
   src: string;
   lrc?: string;
@@ -12,6 +14,18 @@ export interface Song {
   playable?: boolean;
   /** 无音源时的合规跳转链接 */
   externalUrl?: string;
+}
+
+/** 专辑（主站专辑页用） */
+export interface Album {
+  id: number;
+  name: string;
+  cover: string;
+  year: string;
+  artistId: number | null;
+  artistName: string;
+  songCount: number;
+  playableCount: number;
 }
 
 export interface Playlist {

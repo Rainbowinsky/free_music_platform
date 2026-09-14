@@ -7,6 +7,7 @@ import { useSongMap } from '../store/catalog';
 import { usePlayer } from '../store/player';
 import { MeError, meApi, store, type PlayStats } from '../lib/db';
 import { formatTotalDuration } from '../utils/format';
+import { primaryArtist } from '../utils/artist';
 import { PlayIcon } from '../components/Icons';
 
 /** 可选的趋势窗口 */
@@ -163,7 +164,7 @@ export default function Stats() {
                   <Link
                     key={item.artist}
                     className="stats-bar-row"
-                    to={`/artist/${encodeURIComponent(item.artist)}`}
+                    to={`/artist/${encodeURIComponent(primaryArtist(item.artist))}`}
                   >
                     <span className="stats-bar-name" title={item.artist}>
                       {item.artist}

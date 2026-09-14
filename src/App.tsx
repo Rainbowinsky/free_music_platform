@@ -6,6 +6,7 @@ import PlayerBar from './components/PlayerBar';
 import QueueDrawer from './components/QueueDrawer';
 import LyricsView from './components/LyricsView';
 import AuthModal from './components/AuthModal';
+import AccountModal from './components/AccountModal';
 import PlaylistModal from './components/PlaylistModal';
 import AddToPlaylistModal from './components/AddToPlaylistModal';
 import Toaster from './components/Toaster';
@@ -20,6 +21,7 @@ import Stats from './pages/Stats';
 import Ranking from './pages/Ranking';
 import Artists from './pages/Artists';
 import ArtistDetail from './pages/ArtistDetail';
+import AlbumDetail from './pages/AlbumDetail';
 import NotFound from './pages/NotFound';
 import AdminConsole from './pages/admin/AdminConsole';
 import { useAuth } from './store/auth';
@@ -81,6 +83,7 @@ export default function App() {
               <Route path="/ranking" element={<Ranking />} />
               <Route path="/artists" element={<Artists />} />
               <Route path="/artist/:name" element={<ArtistDetail />} />
+              <Route path="/album/:id" element={<AlbumDetail />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
@@ -90,6 +93,7 @@ export default function App() {
       <QueueDrawer />
       <LyricsView />
       <AuthModal />
+      <AccountModal />
       <PlaylistModal />
       <AddToPlaylistModal />
       <Toaster />

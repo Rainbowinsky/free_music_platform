@@ -20,6 +20,10 @@ interface UiState {
   playlistModal: PlaylistModalState;
   openPlaylistModal: (mode: 'create' | 'edit', playlistId?: string) => void;
   closePlaylistModal: () => void;
+  /** 账号设置弹窗（改密码等自助操作） */
+  accountOpen: boolean;
+  openAccount: () => void;
+  closeAccount: () => void;
   /** 歌词是否显示中文译文（设备级偏好，落 localStorage） */
   showTranslation: boolean;
   toggleTranslation: () => void;
@@ -46,6 +50,10 @@ export const useUi = create<UiState>((set, get) => ({
   openPlaylistModal: (mode, playlistId) =>
     set({ playlistModal: mode === 'edit' && playlistId ? { mode, playlistId } : { mode: 'create' } }),
   closePlaylistModal: () => set({ playlistModal: null }),
+
+  accountOpen: false,
+  openAccount: () => set({ accountOpen: true }),
+  closeAccount: () => set({ accountOpen: false }),
 
   showTranslation: store.getShowTranslation(),
   toggleTranslation: () => {

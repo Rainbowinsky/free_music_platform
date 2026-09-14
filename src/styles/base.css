@@ -150,6 +150,18 @@ em {
   background: var(--green-50);
 }
 
+/* 破坏性操作（批量移除等）；与 .btn-danger-ghost 同色，但不带弹窗里的 margin-right: auto */
+.btn-danger-outline {
+  border-color: rgba(255, 90, 90, 0.35);
+  color: var(--red);
+  background: var(--bg-elevated);
+}
+
+.btn-danger-outline:not(:disabled):hover {
+  background: var(--danger-50);
+  border-color: var(--red);
+}
+
 .btn-light {
   background: #fff;
   color: var(--green-700);
@@ -274,6 +286,16 @@ em {
   color: var(--text-3);
   font-size: 12px;
   margin-right: 8px;
+}
+
+/* 可点击的标签（例如歌手页的专辑标签 → 专辑页） */
+.tag-link {
+  transition: color 0.16s ease, background 0.16s ease;
+}
+
+.tag-link:hover {
+  color: var(--green);
+  background: var(--green-50);
 }
 
 .dot {

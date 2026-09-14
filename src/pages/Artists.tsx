@@ -4,6 +4,7 @@ import Cover from '../components/Cover';
 import { ArtistGridSkeleton } from '../components/Skeleton';
 import { useSongs } from '../store/catalog';
 import { gradientOf } from '../utils/format';
+import { primaryArtist } from '../utils/artist';
 
 interface ApiArtist {
   id: number;
@@ -34,7 +35,8 @@ export default function Artists() {
   const fallbackArtists = useMemo(() => {
     const map = new Map<string, { name: string; cover: string; count: number }>();
     for (const song of songs) {
-      const name = song.artist;
+      // 按主歌手聚合，与后端入库口径及歌手页归属保持一致
+      const name = primaryArtist(song.artist);
       const exist = map.get(name);
       if (exist) exist.count += 1;
       else map.set(name, { name, cover: song.cover, count: 1 });

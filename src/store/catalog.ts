@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Song } from '../types';
 import { SONGS as STATIC_SONGS, SONG_MAP as STATIC_MAP } from '../data/songs';
+import { toSong, type ApiSong } from '../lib/song';
 
 /**
  * 曲库数据源
@@ -17,36 +18,6 @@ interface CatalogState {
   error: string;
   load: () => Promise<void>;
 }
-
-interface ApiSong {
-  id: number;
-  title: string;
-  artist: string;
-  artistText: string;
-  album: string;
-  duration: number;
-  src: string;
-  cover: string;
-  lrc: string;
-  source: string;
-  sourceId: string;
-  playable: boolean;
-  externalUrl: string;
-}
-
-const toSong = (row: ApiSong): Song => ({
-  // 用来源侧 ID 作为前端 ID：与静态数据的网易云 ID 对齐，历史「喜欢」记录不会失效
-  id: row.sourceId || String(row.id),
-  name: row.title,
-  artist: row.artist,
-  album: row.album || '未知专辑',
-  cover: row.cover || '',
-  src: row.src || '',
-  lrc: row.lrc || undefined,
-  duration: row.duration || 0,
-  playable: row.playable,
-  externalUrl: row.externalUrl || undefined,
-});
 
 export const useCatalog = create<CatalogState>((set) => ({
   songs: STATIC_SONGS,
