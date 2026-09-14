@@ -725,7 +725,7 @@ router.post('/featured-playlists', adminRequired, async (req, res) => {
       id,
       title,
       String(req.body?.description || '').trim(),
-      String(req.body?.creator || 'QQ音乐官方').trim() || 'QQ音乐官方',
+      String(req.body?.creator || 'Free音乐官方').trim() || 'Free音乐官方',
       JSON.stringify(parseTags(req.body?.tags)),
       Math.max(0, Number(req.body?.playCount) || 0),
       req.body?.sortOrder === undefined ? Number(orderRow?.max_order || -1) + 1 : Number(req.body.sortOrder) || 0,
@@ -743,7 +743,7 @@ router.patch('/featured-playlists/:id', adminRequired, async (req, res) => {
   const patch = {
     title,
     description: req.body?.description === undefined ? current.description : String(req.body.description || '').trim(),
-    creator: req.body?.creator === undefined ? current.creator : String(req.body.creator || '').trim() || 'QQ音乐官方',
+    creator: req.body?.creator === undefined ? current.creator : String(req.body.creator || '').trim() || 'Free音乐官方',
     tags: req.body?.tags === undefined ? current.tags : JSON.stringify(parseTags(req.body.tags)),
     playCount: req.body?.playCount === undefined ? current.play_count : Math.max(0, Number(req.body.playCount) || 0),
     sortOrder: req.body?.sortOrder === undefined ? current.sort_order : Number(req.body.sortOrder) || 0,

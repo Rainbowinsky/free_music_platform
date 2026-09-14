@@ -114,6 +114,13 @@
   color: #fff;
   background: linear-gradient(135deg, #3ad189 0%, #24a866 100%);
   box-shadow: 0 4px 10px rgba(49, 194, 124, 0.35);
+  overflow: hidden;
+}
+
+.logo-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .logo-mark-lg {

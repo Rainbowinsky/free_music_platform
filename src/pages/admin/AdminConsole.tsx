@@ -106,7 +106,7 @@ export default function AdminConsole() {
           </span>
           <span>
             <strong>曲库管理台</strong>
-            <em>QQ音乐 · 学习项目</em>
+            <em>Free音乐 · 学习项目</em>
           </span>
         </Link>
 
@@ -1230,7 +1230,7 @@ interface FeaturedForm {
 }
 
 const emptyFeaturedForm = (): FeaturedForm => ({
-  title: '', description: '', creator: 'QQ音乐官方', tags: '', playCount: '0', sortOrder: '0', visible: true, songIds: [], cover: '',
+  title: '', description: '', creator: 'Free音乐官方', tags: '', playCount: '0', sortOrder: '0', visible: true, songIds: [], cover: '',
 });
 
 function FeaturedPlaylistsTab() {

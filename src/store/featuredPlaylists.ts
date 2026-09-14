@@ -28,7 +28,7 @@ const toPlaylist = (item: ApiPlaylist): Playlist => ({
   desc: item.desc || '',
   tags: Array.isArray(item.tags) ? item.tags : [],
   playCount: Number(item.playCount || 0),
-  creator: item.creator || 'QQ音乐官方',
+  creator: item.creator || 'Free音乐官方',
   songIds: Array.isArray(item.songIds) ? item.songIds : [],
 });
 

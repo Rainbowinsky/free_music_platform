@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../store/auth';
 import { store } from '../lib/db';
-import { CloseIcon, EyeIcon, EyeOffIcon, LockIcon, MusicNoteIcon, SmileIcon, UserIcon } from './Icons';
+import { CloseIcon, EyeIcon, EyeOffIcon, LockIcon, SmileIcon, UserIcon } from './Icons';
 import ParticleBackground from './ParticleBackground';
 
 type Tab = 'login' | 'register';
@@ -80,9 +80,9 @@ export default function AuthModal() {
 
         <div className="auth-head">
           <span className="logo-mark logo-mark-lg auth-logo">
-            <MusicNoteIcon size={22} />
+            <img src="/icon/c55fbb69-0ae0-4659-9de3-6111144698a7.png" alt="" />
           </span>
-          <h3>欢迎来到 QQ音乐</h3>
+          <h3>欢迎来到 Free音乐</h3>
           <p className="auth-sub">登录后即可收藏喜欢的歌曲与歌单</p>
         </div>
 

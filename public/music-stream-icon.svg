@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="surface" x1="124" y1="76" x2="900" y2="948" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B2D2A"/>
+      <stop offset="0.55" stop-color="#10201E"/>
+      <stop offset="1" stop-color="#091210"/>
+    </linearGradient>
+    <linearGradient id="disc" x1="228" y1="170" x2="820" y2="852" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6AF2B1"/>
+      <stop offset="0.52" stop-color="#2BD586"/>
+      <stop offset="1" stop-color="#12A968"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="290" y1="188" x2="734" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9FFEC" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#D9FFEC" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="shadow" x="112" y="112" width="800" height="800" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#050B09" flood-opacity="0.55"/>
+    </filter>
+    <filter id="glow" x="164" y="140" width="696" height="744" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+    <clipPath id="discClip">
+      <circle cx="512" cy="512" r="322"/>
+    </clipPath>
+  </defs>
+
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#surface)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" stroke="#33534B" stroke-width="8"/>
+
+  <circle cx="512" cy="526" r="342" fill="#39D992" fill-opacity="0.15" filter="url(#glow)"/>
+  <circle cx="512" cy="512" r="322" fill="url(#disc)" filter="url(#shadow)"/>
+  <circle cx="512" cy="512" r="322" fill="url(#highlight)"/>
+
+  <g clip-path="url(#discClip)">
+    <path d="M220 494C361 398 626 374 830 475" stroke="#071612" stroke-width="46" stroke-linecap="round"/>
+    <path d="M252 590C391 512 602 502 774 578" stroke="#071612" stroke-width="46" stroke-linecap="round"/>
+    <path d="M310 681C430 623 583 625 701 676" stroke="#071612" stroke-width="46" stroke-linecap="round"/>
+  </g>
+
+  <circle cx="512" cy="512" r="322" stroke="#9BFFD0" stroke-opacity="0.4" stroke-width="5"/>
+  <path d="M710 260C771 301 818 359 844 428" stroke="#E8FFF3" stroke-opacity="0.5" stroke-width="14" stroke-linecap="round"/>
+</svg>

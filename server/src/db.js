@@ -85,7 +85,7 @@ const TABLES = [
     description VARCHAR(500) NOT NULL DEFAULT '',
     cover VARCHAR(255) NOT NULL DEFAULT '',
     tags JSON NULL,
-    creator VARCHAR(80) NOT NULL DEFAULT 'QQ音乐官方',
+    creator VARCHAR(80) NOT NULL DEFAULT 'Free音乐官方',
     play_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
     sort_order INT NOT NULL DEFAULT 0,
     visible TINYINT(1) NOT NULL DEFAULT 1,

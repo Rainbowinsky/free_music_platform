@@ -11,7 +11,7 @@ export const PLAYLISTS: Playlist[] = [
     desc: '每天更新，收录当下最热的华语单曲',
     tags: ['流行', '热歌'],
     playCount: 128_900_000,
-    creator: 'QQ音乐官方',
+    creator: 'Free音乐官方',
     songIds: [
       '1357375695',
       '1330348068',
@@ -30,7 +30,7 @@ export const PLAYLISTS: Playlist[] = [
     desc: '每周精选新上线单曲，第一时间听见',
     tags: ['新歌', '精选'],
     playCount: 36_400_000,
-    creator: 'QQ音乐官方',
+    creator: 'Free音乐官方',
     songIds: ['233931', '449818741', '1293886117', '27808044', '569213220', '1330348068'],
   },
   {
