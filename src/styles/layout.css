@@ -105,15 +105,13 @@
 }
 
 .logo-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  background: linear-gradient(135deg, #3ad189 0%, #24a866 100%);
-  box-shadow: 0 4px 10px rgba(49, 194, 124, 0.35);
   overflow: hidden;
 }
 

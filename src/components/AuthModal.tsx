@@ -78,108 +78,119 @@ export default function AuthModal() {
           <CloseIcon size={16} />
         </button>
 
-        <div className="auth-head">
-          <span className="logo-mark logo-mark-lg auth-logo">
-            <img src="/icon/c55fbb69-0ae0-4659-9de3-6111144698a7.png" alt="" />
-          </span>
-          <h3>欢迎来到 Free音乐</h3>
-          <p className="auth-sub">登录后即可收藏喜欢的歌曲与歌单</p>
-        </div>
-
-        <div className="auth-tabs" role="tablist">
-          <span className={`auth-tab-slider ${tab === 'register' ? 'is-right' : ''}`} aria-hidden="true" />
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'login'}
-            className={`auth-tab ${tab === 'login' ? 'is-active' : ''}`}
-            onClick={() => setTab('login')}
-          >
-            登录
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'register'}
-            className={`auth-tab ${tab === 'register' ? 'is-active' : ''}`}
-            onClick={() => setTab('register')}
-          >
-            注册
-          </button>
-        </div>
-
-        {modalHint ? <p className="auth-hint">{modalHint}</p> : null}
-
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label className="auth-field">
-            <span>账号</span>
-            <span className="auth-input-wrap">
-              <UserIcon size={17} className="auth-input-icon" />
-              <input
-                value={username}
-                autoFocus
-                autoComplete="username"
-                placeholder="2-16 位中文、字母、数字或下划线"
-                onChange={(event) => setUsername(event.target.value)}
-              />
+        {/* 左侧品牌视觉区：深绿色底 + 音乐图标 */}
+        <aside className="auth-side">
+          <div className="auth-side-figure">
+            <span className="auth-side-icon">
+              <img src="/icon/c55fbb69-0ae0-4659-9de3-6111144698a7.png" alt="" />
             </span>
-          </label>
+            <strong className="auth-side-name">Free音乐</strong>
+            <em className="auth-side-slogan">听我想听</em>
+          </div>
+          <p className="auth-side-foot">
+            {tab === 'login' ? '还没有账号？' : '已有账号？'}
+            <button type="button" className="link-btn" onClick={() => setTab(tab === 'login' ? 'register' : 'login')}>
+              {tab === 'login' ? '立即注册' : '去登录'}
+            </button>
+          </p>
+        </aside>
 
-          {tab === 'register' ? (
-            <label className="auth-field auth-field-enter">
-              <span>昵称</span>
+        {/* 右侧表单区 */}
+        <div className="auth-main">
+          <div className="auth-head">
+            <h3>欢迎来到 Free音乐</h3>
+            <p className="auth-sub">登录后即可收藏喜欢的歌曲与歌单</p>
+          </div>
+
+          <div className="auth-tabs" role="tablist">
+            <span className={`auth-tab-slider ${tab === 'register' ? 'is-right' : ''}`} aria-hidden="true" />
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'login'}
+              className={`auth-tab ${tab === 'login' ? 'is-active' : ''}`}
+              onClick={() => setTab('login')}
+            >
+              登录
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'register'}
+              className={`auth-tab ${tab === 'register' ? 'is-active' : ''}`}
+              onClick={() => setTab('register')}
+            >
+              注册
+            </button>
+          </div>
+
+          {modalHint ? <p className="auth-hint">{modalHint}</p> : null}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <label className="auth-field">
+              <span>账号</span>
               <span className="auth-input-wrap">
-                <SmileIcon size={17} className="auth-input-icon" />
+                <UserIcon size={17} className="auth-input-icon" />
                 <input
-                  value={nickname}
-                  autoComplete="nickname"
-                  placeholder="选填，默认与账号相同"
-                  onChange={(event) => setNickname(event.target.value)}
+                  value={username}
+                  autoFocus
+                  autoComplete="username"
+                  placeholder="2-16 位中文、字母、数字或下划线"
+                  onChange={(event) => setUsername(event.target.value)}
                 />
               </span>
             </label>
-          ) : null}
 
-          <label className="auth-field">
-            <span>密码</span>
-            <span className="auth-input-wrap">
-              <LockIcon size={17} className="auth-input-icon" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-                placeholder="至少 6 位"
-                onChange={(event) => setPassword(event.target.value)}
-              />
-              <button
-                type="button"
-                className="auth-eye"
-                aria-label={showPassword ? '隐藏密码' : '显示密码'}
-                onClick={() => setShowPassword((v) => !v)}
-              >
-                {showPassword ? <EyeOffIcon size={17} /> : <EyeIcon size={17} />}
-              </button>
-            </span>
-          </label>
+            {tab === 'register' ? (
+              <label className="auth-field auth-field-enter">
+                <span>昵称</span>
+                <span className="auth-input-wrap">
+                  <SmileIcon size={17} className="auth-input-icon" />
+                  <input
+                    value={nickname}
+                    autoComplete="nickname"
+                    placeholder="选填，默认与账号相同"
+                    onChange={(event) => setNickname(event.target.value)}
+                  />
+                </span>
+              </label>
+            ) : null}
 
-          {error ? <p className="auth-error">{error}</p> : null}
+            <label className="auth-field">
+              <span>密码</span>
+              <span className="auth-input-wrap">
+                <LockIcon size={17} className="auth-input-icon" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+                  placeholder="至少 6 位"
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="auth-eye"
+                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOffIcon size={17} /> : <EyeIcon size={17} />}
+                </button>
+              </span>
+            </label>
 
-          <button type="submit" className="btn auth-submit btn-block" disabled={loading}>
-            <span className="auth-submit-label">{loading ? '处理中…' : tab === 'login' ? '登录' : '注册并登录'}</span>
-          </button>
-        </form>
+            {error ? <p className="auth-error">{error}</p> : null}
 
-        <p className="auth-foot">
-          {tab === 'login' ? '还没有账号？' : '已有账号？'}
-          <button type="button" className="link-btn" onClick={() => setTab(tab === 'login' ? 'register' : 'login')}>
-            {tab === 'login' ? '立即注册' : '去登录'}
-          </button>
-        </p>
-        <p className="auth-tip">
-          {legacyUser
-            ? `检测到旧版本地账号「${legacyUser}」，请用该账号名注册或登录；收藏与歌单会保留`
-            : '账号与管理台共用，登录后收藏、歌单在任意浏览器都可用'}
-        </p>
+            <button type="submit" className="btn auth-submit btn-block" disabled={loading}>
+              <span className="auth-submit-label">{loading ? '处理中…' : tab === 'login' ? '登录' : '注册并登录'}</span>
+            </button>
+          </form>
+
+          <p className="auth-tip">
+            {legacyUser
+              ? `检测到旧版本地账号「${legacyUser}」，请用该账号名注册或登录；收藏与歌单会保留`
+              : '账号与管理台共用，登录后收藏、歌单在任意浏览器都可用'}
+          </p>
+        </div>
       </div>
     </div>
   );

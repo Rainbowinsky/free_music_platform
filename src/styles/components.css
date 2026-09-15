@@ -699,19 +699,95 @@
   pointer-events: none;
 }
 
-/* ---------- 登录卡片：深色毛玻璃 ---------- */
+/* ---------- 登录卡片：左品牌视觉区 + 右表单区 ---------- */
 .auth-modal {
   position: relative;
+  display: flex;
   width: 100%;
-  max-width: 400px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.03) 100%);
+  max-width: 780px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 40%, rgba(255, 255, 255, 0.03) 100%);
   backdrop-filter: blur(26px) saturate(1.5);
   -webkit-backdrop-filter: blur(26px) saturate(1.5);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 22px;
-  padding: 34px 34px 22px;
+  overflow: hidden;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   animation: pop-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* 左侧品牌视觉区：深绿色底 + 音乐图标 */
+.auth-side {
+  flex: 0 0 316px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 36px 30px 26px;
+  text-align: center;
+  background:
+    radial-gradient(130% 80% at 50% 0%, rgba(49, 194, 124, 0.2) 0%, transparent 60%),
+    linear-gradient(168deg, #16382b 0%, #0e281e 52%, #081811 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.auth-side-figure {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.auth-side-icon {
+  width: 116px;
+  height: 116px;
+  border-radius: 28px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 20px 46px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.auth-side-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.auth-side-name {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.auth-side-slogan {
+  font-style: normal;
+  font-size: 12.5px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.auth-side-foot {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.auth-side-foot .link-btn {
+  margin-left: 4px;
+  color: #5fe0a4;
+}
+
+.auth-side-foot .link-btn:hover {
+  color: #8ceabb;
+}
+
+/* 右侧表单区 */
+.auth-main {
+  flex: 1;
+  min-width: 0;
+  padding: 34px 36px 20px;
 }
 
 @keyframes pop-in {
@@ -752,29 +828,11 @@
   text-align: center;
 }
 
-/* logo 外圈呼吸光环 */
-.auth-logo {
-  position: relative;
-  box-shadow: 0 6px 18px rgba(49, 194, 124, 0.45), 0 0 0 6px rgba(49, 194, 124, 0.12);
-  animation: logo-glow 3.2s ease-in-out infinite;
-}
-
-@keyframes logo-glow {
-  0%,
-  100% {
-    box-shadow: 0 6px 18px rgba(49, 194, 124, 0.45), 0 0 0 6px rgba(49, 194, 124, 0.12);
-  }
-  50% {
-    box-shadow: 0 6px 22px rgba(49, 194, 124, 0.6), 0 0 0 10px rgba(49, 194, 124, 0.07);
-  }
-}
-
 .auth-head h3 {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.5px;
   color: rgba(255, 255, 255, 0.95);
-  margin-top: 10px;
 }
 
 .auth-sub {
@@ -990,22 +1048,6 @@
   opacity: 0.6;
 }
 
-.auth-foot {
-  margin-top: 18px;
-  text-align: center;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.42);
-}
-
-.auth-foot .link-btn {
-  margin-left: 4px;
-  color: #4fd996;
-}
-
-.auth-foot .link-btn:hover {
-  color: #7ceab8;
-}
-
 .auth-tip {
   margin-top: 12px;
   text-align: center;
@@ -1013,10 +1055,20 @@
   color: rgba(255, 255, 255, 0.3);
 }
 
+/* 窄屏：收起左侧品牌区，只留表单 */
+@media (max-width: 700px) {
+  .auth-modal {
+    max-width: 400px;
+  }
+
+  .auth-side {
+    display: none;
+  }
+}
+
 /* 降低动态偏好：极光静止，Canvas 也只渲染一帧（组件内处理） */
 @media (prefers-reduced-motion: reduce) {
-  .aurora,
-  .auth-logo {
+  .aurora {
     animation: none;
   }
 }
